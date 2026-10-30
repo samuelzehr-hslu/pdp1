@@ -52,7 +52,9 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 1. [Arduino IDE](https://www.arduino.cc/en/software) installieren.
 2. Board wählen: *Arduino Uno* bzw. *Arduino Nano*.
 3. Benötigte Bibliotheken über den Library Manager installieren (`Wire` ist integriert; IMU-Bibliothek: *im Team festlegen und hier eintragen*).
-4. Sketch öffnen, Board per USB verbinden, hochladen.
+4. Sketch `jointsense/jointsense.ino` öffnen, Board per USB verbinden, hochladen.
+
+Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungstabelle oben: bei einer Änderung zuerst die README, dann `pins.h` anpassen.
 
 ## Bedienung
 
