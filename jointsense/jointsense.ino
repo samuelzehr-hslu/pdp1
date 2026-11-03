@@ -14,7 +14,7 @@
 #include "pins.h"
 
 // ---------- Einstellungen (hier dürft ihr Werte ändern) ----------
-const float GRENZWERT_GRAD   = 10.0; // ab so vielen Grad Überstreckung wird gewarnt (QA-03: 0 bis 10)
+const float GRENZWERT_GRAD   = 5.0; // ab so vielen Grad Überstreckung wird gewarnt (QA-03: 0 bis 10)
 const float HYSTERESE_GRAD   = 2.0;  // Motor geht erst wieder aus, wenn 2 Grad unter dem Grenzwert
 const unsigned long ENTPRELL_MS = 80;  // so lange muss die Überstreckung anliegen (README: 50-100 ms)
 const unsigned long MESS_PAUSE_MS = 20; // alle 20 ms messen = 50 Hz (README: 50-100 Hz)
