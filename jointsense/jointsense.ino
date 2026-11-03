@@ -1,5 +1,7 @@
 // JointSense - Überstreckung des Ellbogens erkennen und per Vibration melden.
 // Alle Pin-Nummern und I2C-Adressen stehen in pins.h (Quelle: README, Abschnitt "Verdrahtung").
+// Die reine Logik (Winkel, Grenzwert, Taste entprellen) steht in logik.h / logik.cpp.
+// Diese Datei hier macht nur den Ablauf und redet mit der Hardware.
 //
 // So funktioniert es:
 //   1. Zwei IMUs (Oberarm und Unterarm) messen je ihre Neigung.
@@ -12,6 +14,7 @@
 #include <Wire.h>
 #include <math.h>
 #include "pins.h"
+#include "logik.h"
 
 // ---------- Einstellungen (hier dürft ihr Werte ändern) ----------
 const float GRENZWERT_GRAD   = 5.0; // ab so vielen Grad Überstreckung wird gewarnt (QA-03: 0 bis 10)
@@ -20,15 +23,14 @@ const unsigned long ENTPRELL_MS = 80;  // so lange muss die Überstreckung anlie
 const unsigned long MESS_PAUSE_MS = 20; // alle 20 ms messen = 50 Hz (README: 50-100 Hz)
 const int MOTOR_STAERKE      = 200;  // PWM-Wert 0 (aus) bis 255 (volle Kraft)
 const int EINMESS_ANZAHL     = 25;   // so viele Messungen werden beim Einmessen gemittelt
+const unsigned long TASTER_PRELL_MS = 50; // so lange "prellt" die Taste nach einer Änderung
 
 // ---------- Variablen, die sich während dem Betrieb ändern ----------
 float referenzWinkel = 0.0;          // Winkel bei gestrecktem Arm (wird beim Einmessen gesetzt)
-bool motorLaeuft = false;            // läuft der Motor gerade?
-unsigned long zuWeitSeit = 0;        // seit wann ist der Arm zu weit? (0 = gerade nicht zu weit)
+GrenzwertZustand grenzZustand = {false, 0}; // Motor aus, Arm nicht zu weit (siehe logik.h)
+TasteZustand tasteZustand = {false, 0};     // Taste nicht gedrückt (siehe logik.h)
 unsigned long letzteMessung = 0;     // wann haben wir zuletzt gemessen?
 unsigned long letzteAusgabe = 0;     // wann haben wir zuletzt etwas auf den Monitor geschrieben?
-int alterTasterZustand = HIGH;       // Zustand der Taste beim letzten Durchlauf
-unsigned long letzteTasterAenderung = 0;
 
 
 // Läuft einmal beim Start.
@@ -74,7 +76,8 @@ void loop() {
 
   float winkel = winkelLesen();
   float abweichung = winkel - referenzWinkel;
-  bool zuWeit = grenzwertPruefen(abweichung);
+  bool zuWeit = grenzwertPruefen(grenzZustand, abweichung, millis(),
+                                 GRENZWERT_GRAD, HYSTERESE_GRAD, ENTPRELL_MS);
   feedbackAusgeben(zuWeit);
 
   // 4x pro Sekunde den aktuellen Wert auf den Seriellen Monitor schreiben
@@ -118,51 +121,21 @@ float neigungLesen(int adresse) {
   int16_t az = (Wire.read() << 8) | Wire.read();
 
   // Welche Achse die richtige ist, hängt davon ab, wie die IMU am Arm sitzt!
-  float x = ax;
-  float y = ay;
-  float z = az;
-  float neigung = atan2(x, sqrt(y * y + z * z)) * 180.0 / PI;
-  return neigung;
+  // Die Rechnung selbst steht in logik.cpp.
+  return neigungAusBeschleunigung(ax, ay, az);
 }
 
 // Berechnet den Ellbogenwinkel aus den Daten beider IMUs.
 float winkelLesen() {
   float oberarm  = neigungLesen(IMU1_ADRESSE);
   float unterarm = neigungLesen(IMU2_ADRESSE);
-  return unterarm - oberarm;
+  return ellbogenWinkel(oberarm, unterarm);
 }
 
 
 // =====================================================================
-// LOGIK: Grenzwert prüfen (hängt nicht von der Hardware ab)
+// EINMESSEN
 // =====================================================================
-
-// Prüft, ob der Winkel über dem Grenzwert liegt (mit Entprellung und Hysterese).
-// abweichung = wie viele Grad der Arm über der eingemessenen Referenz ist.
-bool grenzwertPruefen(float abweichung) {
-  // Hysterese: Läuft der Motor schon, gilt eine etwas tiefere Grenze.
-  // So flackert der Motor nicht, wenn der Arm genau an der Grenze ist.
-  float grenze = GRENZWERT_GRAD;
-  if (motorLaeuft) {
-    grenze = GRENZWERT_GRAD - HYSTERESE_GRAD;
-  }
-
-  if (abweichung <= grenze) {
-    zuWeitSeit = 0;                   // Arm ist im erlaubten Bereich
-    return false;
-  }
-
-  // Arm ist zu weit. Seit wann?
-  if (zuWeitSeit == 0) {
-    zuWeitSeit = millis();
-  }
-
-  // Entprellung: Erst warnen, wenn es lange genug zu weit ist
-  if (millis() - zuWeitSeit >= ENTPRELL_MS) {
-    return true;
-  }
-  return motorLaeuft;                 // noch nicht lange genug: Zustand beibehalten
-}
 
 // Misst die Referenz: Mittelwert über mehrere Messungen bei gestrecktem Arm.
 void einmessen() {
@@ -172,7 +145,7 @@ void einmessen() {
     summe = summe + winkelLesen();
     delay(MESS_PAUSE_MS);
   }
-  referenzWinkel = summe / EINMESS_ANZAHL;
+  referenzWinkel = referenzBerechnen(summe, EINMESS_ANZAHL);
 
   Serial.print("Referenz gesetzt: ");
   Serial.print(referenzWinkel, 1);
@@ -191,7 +164,6 @@ void einmessen() {
 
 // Schaltet den Vibrationsmotor ein oder aus.
 void feedbackAusgeben(bool zuWeit) {
-  motorLaeuft = zuWeit;
   if (zuWeit) {
     analogWrite(PIN_MOTOR_PWM, MOTOR_STAERKE);
   } else {
@@ -200,16 +172,8 @@ void feedbackAusgeben(bool zuWeit) {
 }
 
 // Gibt true zurück, wenn die Taste gerade eben gedrückt wurde (nur einmal pro Druck).
-// Wartet 50 ms nach jeder Änderung, weil eine Taste beim Drücken kurz "prellt".
+// Die Entprell-Logik steht in logik.cpp (tasteNeuGedrueckt).
 bool tasteGedrueckt() {
-  int zustand = digitalRead(PIN_TASTER);
-  if (zustand == alterTasterZustand) {
-    return false;                     // nichts hat sich geändert
-  }
-  if (millis() - letzteTasterAenderung < 50) {
-    return false;                     // noch am Prellen, ignorieren
-  }
-  letzteTasterAenderung = millis();
-  alterTasterZustand = zustand;
-  return zustand == LOW;              // LOW = gedrückt
+  bool istGedrueckt = (digitalRead(PIN_TASTER) == LOW);   // LOW = gedrückt
+  return tasteNeuGedrueckt(tasteZustand, istGedrueckt, millis(), TASTER_PRELL_MS);
 }

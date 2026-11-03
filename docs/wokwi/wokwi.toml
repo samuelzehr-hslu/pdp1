@@ -1,0 +1,13 @@
+# Einstellungen für die Wokwi-Simulation von der Kommandozeile (wokwi-cli).
+# Die Pfade sind relativ zu diesem Ordner (docs/wokwi/).
+#
+# Die Firmware entsteht beim Kompilieren mit:
+#   arduino-cli compile --fqbn arduino:avr:uno --output-dir scratch/build jointsense
+#
+# Die Schaltung (diagram.json) liegt in jointsense/ und wird beim Start mit
+# --diagram-file angegeben (siehe README.md in diesem Ordner).
+
+[wokwi]
+version = 1
+firmware = '../../scratch/build/jointsense.ino.hex'
+elf = '../../scratch/build/jointsense.ino.elf'
