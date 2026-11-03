@@ -17,8 +17,11 @@ const int PIN_MOTOR_IN2 = 8;   // D8 -> Treiber IN2 (im Code dauerhaft LOW)
 const int IMU1_ADRESSE = 0x68; // Oberarm, AD0 an GND
 const int IMU2_ADRESSE = 0x69; // Unterarm, AD0 an 3V3
 
-// --- Noch offen (stehen in der README unter "Bedienung", aber nicht in der Verdrahtung) ---
-// TODO: Pin für die Taste festlegen und in der README-Verdrahtung eintragen
+// --- Taste (Einmessen) ---
+// VORLÄUFIG: D2 wurde für die Wokwi-Simulation gewählt. Team muss das noch bestätigen.
+const int PIN_TASTER = 2;      // D2 -> Taste -> GND (interner Pull-up, gedrückt = LOW)
+
+// --- Noch offen (steht in der README unter "Bedienung", aber nicht in der Verdrahtung) ---
 // TODO: Pin für die Status-LED festlegen und in der README-Verdrahtung eintragen
 
 // --- Offene Fragen an das Team ---

@@ -35,6 +35,7 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 | A5 (SCL) | SCL beider IMUs |
 | D9 (PWM) | Treiber IN1 |
 | D8 | Treiber IN2 (im Code dauerhaft `LOW`) |
+| D2 | Taste (Einmessen), andere Seite an GND. *Vorläufig, Team muss bestätigen* |
 | – | Treiber OUT A / OUT B → Vibrationsmotor |
 
 ## Software
