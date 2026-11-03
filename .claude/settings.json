@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "agent": "engineer",
+  "permissions": {
+    "deny": [
+      "Bash(arduino-cli upload*)",
+      "Bash(*arduino-cli*upload*)",
+      "Bash(*arduino-cli* -u *)",
+      "Bash(arduino-cli monitor*)",
+      "Bash(*arduino-cli*monitor*)",
+      "Bash(*avrdude*)",
+      "PowerShell(arduino-cli upload*)",
+      "PowerShell(*arduino-cli*upload*)",
+      "PowerShell(*arduino-cli* -u *)",
+      "PowerShell(arduino-cli monitor*)",
+      "PowerShell(*arduino-cli*monitor*)",
+      "PowerShell(*avrdude*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Edit|Write|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/python_starten.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/developer_blind.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/python_starten.sh\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/tester_kein_code.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
