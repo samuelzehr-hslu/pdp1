@@ -25,7 +25,8 @@ JointSense: tragbares Assistenzsystem, das die Überstreckung des Ellbogens erke
 
 Arduino-Sketch in `jointsense/`. Der Ordnername muss gleich heissen wie die `.ino`-Datei (Arduino-Regel).
 
-- `jointsense/jointsense.ino`: nur der grobe Ablauf (`setup()`, `loop()` und die Platzhalter `winkelLesen()`, `grenzwertPruefen()`, `feedbackAusgeben()`). Logik ist noch nicht implementiert (`TODO`).
+- `jointsense/jointsense.ino`: Ablauf (`setup()`, `loop()`, `winkelLesen()`, `grenzwertPruefen()`, `feedbackAusgeben()`). Erste Version der Logik ist drin (MPU6050 auslesen, Einmessen, Grenzwert, Motor).
+- `jointsense/diagram.json`: Wokwi-Simulation. Wokwi simuliert keine MOSFET-Stufe, der Motor ist dort eine LED.
 - `jointsense/pins.h`: Pins und I²C-Adressen. SDA/SCL (A4/A5) werden von `Wire` automatisch genutzt.
 
 Wird der Sketch zu lang, Logik (Winkel, Grenzwert, Motor) in weitere `.h`/`.cpp`-Dateien im selben Ordner auslagern. Das Signalverarbeitungs-Konzept (Abtastrate, Sensorfusion, Entprellung, Einmessen, Drift) steht in der README unter «Software».
@@ -43,5 +44,5 @@ Diese Punkte sind im Team noch zu klären und in `pins.h` als `TODO` markiert:
 
 1. Pins für **Taste** und **Status-LED**: in der README unter «Bedienung» erwähnt, aber nicht in der Verdrahtungstabelle.
 2. **IMU-Typ** ist offen. Die README nennt den BNO085, die Adressen `0x68`/`0x69` über AD0 passen aber zu MPU6050/MPU6500 (BNO085: `0x4A`/`0x4B`).
-3. **Motortreiber-Typ** ist offen.
+3. **MOSFET-, Dioden- und Spannungsregler-Typ** sind offen (MOSFET muss Logic-Level sein).
 4. **IMU-Bibliothek** ist offen (README «Setup», Punkt 3).

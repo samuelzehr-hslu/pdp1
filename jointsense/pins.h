@@ -7,9 +7,9 @@
 #ifndef PINS_H
 #define PINS_H
 
-// --- Motortreiber / Vibrationsmotor ---
-const int PIN_MOTOR_PWM = 9;   // D9 (PWM) -> Treiber IN1
-const int PIN_MOTOR_IN2 = 8;   // D8 -> Treiber IN2 (im Code dauerhaft LOW)
+// --- Vibrationsmotor (über N-Kanal-MOSFET) ---
+// D9 -> 220 Ohm -> MOSFET Gate. Der MOSFET schaltet den Motor an 3 V (Spannungsregler).
+const int PIN_MOTOR_PWM = 9;   // D9 (PWM) -> Gate-Widerstand -> MOSFET Gate
 
 // --- IMUs (gemeinsamer I2C-Bus) ---
 // SDA = A4 und SCL = A5 beim Uno/Nano. Die Pins nutzt die Bibliothek Wire automatisch,
@@ -27,6 +27,6 @@ const int PIN_TASTER = 2;      // D2 -> Taste -> GND (interner Pull-up, gedrück
 // --- Offene Fragen an das Team ---
 // TODO: IMU-Typ festlegen. Die Adressen 0x68/0x69 (über AD0) passen zu MPU6050/MPU6500,
 //       nicht zum BNO085 (dieser hat die Adressen 0x4A/0x4B).
-// TODO: Motortreiber-Typ festlegen.
+// TODO: MOSFET-Typ festlegen (muss Logic-Level sein, also bei 5 V am Gate ganz durchschalten).
 
 #endif
