@@ -18,7 +18,11 @@ const float GRENZWERT_GRAD   = 10.0; // ab so vielen Grad Überstreckung wird ge
 const float HYSTERESE_GRAD   = 2.0;  // Motor geht erst wieder aus, wenn 2 Grad unter dem Grenzwert
 const unsigned long ENTPRELL_MS = 80;  // so lange muss die Überstreckung anliegen (README: 50-100 ms)
 const unsigned long MESS_PAUSE_MS = 20; // alle 20 ms messen = 50 Hz (README: 50-100 Hz)
-const int MOTOR_STAERKE      = 200;  // PWM-Wert 0 (aus) bis 255 (volle Kraft)
+// Motorstärke als PWM-Wert: 0 = aus, 255 = immer an (volle 3 V vom Spannungsregler).
+// Der Motor braucht mindestens 2,5 V. PWM verteilt die 3 V nur über die Zeit:
+// Durchschnitt = 3 V * MOTOR_STAERKE / 255. Unter ca. 215 sind das weniger als 2,5 V,
+// dann läuft der Motor evtl. nicht mehr sicher an. Deshalb nicht unter 215 gehen.
+const int MOTOR_STAERKE      = 255;
 const int EINMESS_ANZAHL     = 25;   // so viele Messungen werden beim Einmessen gemittelt
 
 // ---------- Variablen, die sich während dem Betrieb ändern ----------
@@ -37,9 +41,7 @@ void setup() {
   Wire.begin();                       // I2C starten (SDA = A4, SCL = A5)
 
   pinMode(PIN_MOTOR_PWM, OUTPUT);
-  pinMode(PIN_MOTOR_IN2, OUTPUT);
-  digitalWrite(PIN_MOTOR_IN2, LOW);   // IN2 bleibt immer LOW
-  analogWrite(PIN_MOTOR_PWM, 0);      // Motor am Anfang aus
+  analogWrite(PIN_MOTOR_PWM, 0);      // Motor am Anfang aus (MOSFET sperrt)
 
   pinMode(PIN_TASTER, INPUT_PULLUP);  // Taste gegen GND, nicht gedrückt = HIGH
 
@@ -190,6 +192,7 @@ void einmessen() {
 // =====================================================================
 
 // Schaltet den Vibrationsmotor ein oder aus.
+// Der Arduino schaltet nur den MOSFET. Den Strom für den Motor liefert der 3-V-Regler.
 void feedbackAusgeben(bool zuWeit) {
   motorLaeuft = zuWeit;
   if (zuWeit) {

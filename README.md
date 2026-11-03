@@ -20,7 +20,11 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 | Mikrocontroller | Arduino Uno / Nano | Winkelberechnung, Grenzwertlogik |
 | IMU 1 (Oberarm) | --- | Lage Oberarm |
 | IMU 2 (Unterarm) | --- | Lage Unterarm |
-| Motortreiber | --- | Ansteuerung Motor |
+| Schalter | N-Kanal-MOSFET (Logic-Level, Typ ---) | Schaltet den Motor, Arduino liefert nur das Steuersignal (Motor braucht bis 80 mA) |
+| Gate-Widerstand | 220 Ω | Begrenzt Stromspitzen beim Umladen des Gates, schützt den Arduino-Ausgang |
+| Pull-down-Widerstand | 100 kΩ | Hält das Gate auf 0 V, solange der Arduino kein Signal gibt (Motor bleibt beim Start aus) |
+| Freilaufdiode | --- | Begrenzt die Spannungsspitze des Motors beim Ausschalten, schützt den MOSFET |
+| Spannungsregler | 3 V (Typ ---) | Macht aus 5 V stabile 3 V, Motor ist für 2,5–3,5 V ausgelegt |
 | Aktor | ERM-Coin-Vibrationsmotor| Haptisches Feedback |
 | Versorgung | USB / Powerbank | Stromversorgung Prototyp |
 
@@ -28,15 +32,17 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 
 | Arduino | Verbunden mit |
 |---|---|
-| 5V | IMU 1 VCC, IMU 2 VCC, Treiber VCC |
+| 5V | IMU 1 VCC, IMU 2 VCC, Spannungsregler IN |
 | GND | alle GND, IMU 1 AD0 (→ Adresse `0x68`) |
 | 3V3 | IMU 2 AD0 (→ Adresse `0x69`) |
 | A4 (SDA) | SDA beider IMUs (gemeinsamer I²C-Bus) |
 | A5 (SCL) | SCL beider IMUs |
-| D9 (PWM) | Treiber IN1 |
-| D8 | Treiber IN2 (im Code dauerhaft `LOW`) |
+| D9 (PWM) | 220 Ω → MOSFET Gate |
 | D2 | Taste (Einmessen), andere Seite an GND. *Vorläufig, Team muss bestätigen* |
-| – | Treiber OUT A / OUT B → Vibrationsmotor |
+| – | MOSFET Gate → 100 kΩ → GND |
+| – | Spannungsregler OUT (3 V) → Motor + |
+| – | Motor − → MOSFET Drain; MOSFET Source → GND |
+| – | Freilaufdiode parallel zum Motor, Kathode (Strich) an 3 V, Anode an Drain |
 
 ## Software
 

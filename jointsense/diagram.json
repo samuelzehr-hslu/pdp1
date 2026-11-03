@@ -40,7 +40,7 @@
       "id": "motor",
       "top": -234,
       "left": -73,
-      "attrs": { "color": "orange", "label": "Motor (Platzhalter)" }
+      "attrs": { "color": "orange", "label": "Motor (Platzhalter fuer MOSFET-Stufe)" }
     }
   ],
   "connections": [
