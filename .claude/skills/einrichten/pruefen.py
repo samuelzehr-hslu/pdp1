@@ -151,12 +151,43 @@ if system == "Mac" and prozessor.startswith("ARM64"):
         print("[FEHLT] Rosetta 2 (fuer arduino:avr auf Apple-Chip)")
         alles_ok = False
 
+def compiler_ausprobieren(name):
+    # Baut ein winziges Testprogramm. Nur so sieht man, ob der Compiler wirklich geht.
+    # (Ein Compiler kann gefunden werden und trotzdem nichts bauen können, z. B. wenn
+    #  ihm die Standard-Bibliothek fehlt: dann kommt "math.h file not found".)
+    import tempfile
+    programm = (
+        "#include <cmath>\n#include <cstdint>\n#include <cstdio>\n#include <cstdlib>\n"
+        "int main() { std::printf(\"%d\", (int)std::fabs(-1.0)); return 0; }\n"
+    )
+    with tempfile.TemporaryDirectory() as ordner:
+        quelle = os.path.join(ordner, "probe.cpp")
+        ziel = os.path.join(ordner, "probe.exe" if os.name == "nt" else "probe")
+        with open(quelle, "w") as datei:
+            datei.write(programm)
+        code, meldung = befehl_ausfuehren([name, "-std=c++11", quelle, "-o", ziel])
+        if code != 0:
+            return False, meldung
+        code, ausgabe = befehl_ausfuehren([ziel])
+        if code != 0 or ausgabe.strip() != "1":
+            return False, "Testprogramm laesst sich bauen, startet aber nicht richtig"
+    return True, ""
+
+
 # C++-Compiler: g++ oder clang++ (Windows ARM hat meist nur clang++)
 compiler_gefunden = False
 for name in ("g++", "clang++"):
     if shutil.which(name):
-        werkzeug_pruefen(f"C++-Compiler ({name})", [name, "--version"])
         compiler_gefunden = True
+        code, version = befehl_ausfuehren([name, "--version"])
+        geht, meldung = compiler_ausprobieren(name)
+        if geht:
+            print(f"[OK]    C++-Compiler ({name}): {version}")
+        else:
+            print(f"[FEHLT] C++-Compiler ({name}) ist da, kann aber kein Programm bauen")
+            print(f"        Meldung: {meldung}")
+            print("        (Meist fehlt die Standard-Bibliothek, siehe SKILL.md)")
+            alles_ok = False
         break
 if not compiler_gefunden:
     print("[FEHLT] C++-Compiler (g++ oder clang++)")
