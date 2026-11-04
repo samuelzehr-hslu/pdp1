@@ -36,6 +36,8 @@ Erkläre für **jedes fehlende Werkzeug**:
 | wokwi-cli | Arduino-Simulation | siehe github.com/wokwi/wokwi-cli | gleich (Intel-Version läuft über Emulation) | gleich (es gibt eine Apple-Chip-Version) | gleich (es gibt eine ARM64-Version) |
 | WOKWI_CLI_TOKEN | Zugang für wokwi-cli | gratis auf wokwi.com/dashboard/ci erstellen, als Umgebungsvariable setzen («Umgebungsvariablen bearbeiten») | gleich | in `~/.zshrc`: `export WOKWI_CLI_TOKEN=...` | in `~/.bashrc`: `export WOKWI_CLI_TOKEN=...` |
 
+Steht beim C++-Compiler «ist da, kann aber kein Programm bauen» (Meldung z. B. `'math.h' file not found`): Der Compiler selbst ist installiert, aber ihm fehlt die **Standard-Bibliothek** (die Grundbausteine wie `printf` oder `fabs`). Das passiert oft auf **Windows ARM**, wenn LLVM von llvm.org installiert ist: Dieses `clang++` erwartet die Bibliothek von Visual Studio, die fehlt. Lösung: den MSYS2-Weg aus der Tabelle oben nehmen (`pacman -S mingw-w64-clang-aarch64-clang` im Fenster «MSYS2 CLANGARM64») und `C:\msys64\clangarm64\bin` im PATH **vor** `C:\Program Files\LLVM\bin` setzen. Danach Claude Code neu starten und `/einrichten` nochmals laufen lassen.
+
 Steht bei «Sicherheits-Sperren (Hooks)» `[FEHLT]`: Das ist **wichtig**. Ohne Sperren ist der Developer nicht blind und der Tester nicht vom Code getrennt. Meist fehlt Python oder `sh`. Die Sperren halten Developer und Tester dann vorsichtshalber ganz an, bis es behoben ist.
 
 Hinweise:
