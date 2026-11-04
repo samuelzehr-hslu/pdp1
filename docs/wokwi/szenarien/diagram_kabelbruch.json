@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "author": "JointSense PDP1 - Testvariante mit 'Kabel' (Taster) in der SDA-Leitung jeder IMU",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 0.6,
+      "left": -0.6,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-mpu6050",
+      "id": "imu1",
+      "top": -313.58,
+      "left": -8.12,
+      "rotate": 90,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-mpu6050",
+      "id": "imu2",
+      "top": -313.82,
+      "left": 281.32,
+      "rotate": 270,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "taste",
+      "top": -147.4,
+      "left": 307.2,
+      "attrs": {
+        "color": "blue",
+        "label": "Einmessen"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -120,
+      "left": -77.35,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "motor",
+      "top": -234,
+      "left": -73,
+      "attrs": {
+        "color": "orange",
+        "label": "Motor (Platzhalter)"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "kabel1",
+      "top": -330,
+      "left": -190,
+      "attrs": {
+        "color": "green",
+        "label": "Kabel SDA IMU1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "kabel2",
+      "top": -330,
+      "left": 420,
+      "attrs": {
+        "color": "green",
+        "label": "Kabel SDA IMU2"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "imu1:VCC",
+      "uno:5V",
+      "red",
+      []
+    ],
+    [
+      "imu1:GND",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "imu1:SCL",
+      "uno:A5",
+      "blue",
+      []
+    ],
+    [
+      "imu1:AD0",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "imu2:VCC",
+      "uno:5V",
+      "red",
+      []
+    ],
+    [
+      "imu2:GND",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "imu2:SCL",
+      "uno:A5",
+      "blue",
+      []
+    ],
+    [
+      "imu2:AD0",
+      "uno:5V",
+      "red",
+      []
+    ],
+    [
+      "taste:1.l",
+      "uno:2",
+      "violet",
+      []
+    ],
+    [
+      "taste:2.l",
+      "uno:GND.2",
+      "black",
+      []
+    ],
+    [
+      "uno:9",
+      "r1:1",
+      "orange",
+      [
+        "v-48",
+        "h-210.4"
+      ]
+    ],
+    [
+      "r1:2",
+      "motor:A",
+      "orange",
+      []
+    ],
+    [
+      "motor:C",
+      "uno:GND.3",
+      "black",
+      []
+    ],
+    [
+      "imu1:SDA",
+      "kabel1:1.l",
+      "green",
+      []
+    ],
+    [
+      "kabel1:2.l",
+      "uno:A4",
+      "green",
+      []
+    ],
+    [
+      "imu2:SDA",
+      "kabel2:1.l",
+      "green",
+      []
+    ],
+    [
+      "kabel2:2.l",
+      "uno:A4",
+      "green",
+      []
+    ]
+  ],
+  "dependencies": {}
+}

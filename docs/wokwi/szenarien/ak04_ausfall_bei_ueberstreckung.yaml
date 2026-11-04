@@ -1,0 +1,61 @@
+# AK-3 bis AK-9: IMU 2 faellt aus, waehrend der Arm ueberstreckt ist (Muster, Vorrang, Wiederkehr, alte Referenz)
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak04_ausfall_bei_ueberstreckung"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  # Arm ueberstrecken (IMU 2 gekippt = +30 Grad): die normale Warnung muss laufen
+  - set-control: {part-id: imu2, control: accelX, value: 0.5}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.87}
+  - delay: 600ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  # IMU 2 faellt aus. M = Zeitpunkt der ersten FEHLER-Zeile (AK-6: sofort)
+  - set-control: {part-id: kabel2, control: pressed, value: 0}
+  - wait-serial: "FEHLER"
+  # Muster: an 0-100, aus 100-200, an 200-300, aus 300-400, an 400-500 (gemessen in der Mitte jedes Stosses)
+  - delay: 50ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - delay: 100ms
+  # t=150: Pause. Der Arm ist weiter ueberstreckt, trotzdem aus (AK-4: Ausfall hat Vorrang)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - delay: 100ms
+  # t=550: Muster zu Ende, Motor aus (AK-5)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 950ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1500ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1900ms
+  # t=4900: noch Pause
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 150ms
+  # t=5050: Muster beginnt nach 5000 ms von vorn (Start zu Start), Toleranz +-50 ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  # Kabel wieder dran, mitten in einem Stoss (t=5250)
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - wait-serial: "wieder da"
+  - delay: 45ms
+  # AK-8: Motor sofort aus. AK-9: kein Sofort-Alarm aus altem Zustand (Arm noch ueberstreckt, Entprellzeit 80 ms)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 400ms
+  # AK-9 und AK-3: Die alte Referenz gilt noch. Der Arm ist weiter ueberstreckt, also kommt der Alarm zurueck
+  - expect-pin: {part-id: uno, pin: "9", value: 1}

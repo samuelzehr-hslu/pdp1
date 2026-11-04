@@ -9,6 +9,8 @@
 #      Alle Warnungen zählen als Fehler (-Wall -Wextra -Werror).
 #      Der Ordner jointsense/ wird eingebunden, damit "#include \"logik.h\"" klappt,
 #      und jointsense/logik.cpp wird mit übersetzt (dort steckt der Inhalt der Funktionen).
+#      Vorher werden die Python-Szenarien (docs/tests/szenarien/*.py) gestartet. Sie legen
+#      CSV-Dateien in scratch/szenarien/ ab, die manche Tests einlesen.
 #   2. Das fertige Testprogramm landet in scratch/tests/ (nicht im Repo) und wird gestartet.
 #   3. Am Schluss: Zusammenfassung. Exit-Code 0 = alles ok, 1 = mindestens ein Fehler.
 
@@ -45,6 +47,16 @@ def main():
     print("Compiler: " + compiler)
 
     os.makedirs(AUSGABE_ORDNER, exist_ok=True)
+
+    # Szenarien erzeugen (Python-Skripte in docs/tests/szenarien/ schreiben CSV-Dateien nach
+    # scratch/szenarien/). Manche Logik-Tests lesen diese Dateien.
+    for skript in sorted(glob.glob(os.path.join(HAUPTORDNER, "docs", "tests", "szenarien", "*.py"))):
+        print("== Szenarien erzeugen: " + os.path.basename(skript))
+        erzeugt = subprocess.run([sys.executable, skript], cwd=HAUPTORDNER, stdout=subprocess.DEVNULL)
+        if erzeugt.returncode != 0:
+            print("  FEHLER  Szenario-Skript fehlgeschlagen: " + os.path.basename(skript))
+            sys.exit(1)
+
     testdateien = sorted(glob.glob(os.path.join(TEST_ORDNER, "test_*.cpp")))
 
     if not testdateien:
@@ -74,7 +86,7 @@ def main():
 
         # Schritt 2: Starten (höchstens 60 Sekunden, falls etwas hängt)
         try:
-            gelaufen = subprocess.run([programm], timeout=60)
+            gelaufen = subprocess.run([programm], timeout=60, cwd=HAUPTORDNER)
         except subprocess.TimeoutExpired:
             print("  FEHLER  Test hängt (länger als 60 s)")
             fehlgeschlagen.append(name)

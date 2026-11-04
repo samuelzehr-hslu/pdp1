@@ -1,0 +1,28 @@
+# AK-6 und AK-8: beide IMUs fallen aus (beide werden gemeldet); erst wenn BEIDE zurueck sind, endet der Ausfall
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak06_beide_ausfall"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  # Zeiten ab Ende des Vorspanns (5150 ms): IMU 1 weg bei +0, IMU 2 weg bei +1000
+  - set-control: {part-id: kabel1, control: pressed, value: 0}
+  - delay: 1000ms
+  - set-control: {part-id: kabel2, control: pressed, value: 0}
+  - delay: 4000ms
+  # +5000 (= 10150 ms): beide sind seit mehr als 3 s weg. IMU 2 kommt zurueck, IMU 1 NICHT
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 3000ms
+  # +8000 (= 13150 ms): IMU 1 ist noch weg -> Ausfall dauert an, noch KEIN 'wieder da' (prueft pruefe_REQ-001.py mit Abbruch bei 13100 ms)
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - wait-serial: "wieder da"
+  - delay: 45ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}

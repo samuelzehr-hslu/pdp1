@@ -80,3 +80,60 @@ bool tasteNeuGedrueckt(TasteZustand &zustand, bool istGedrueckt, uint32_t jetztM
   zustand.warGedrueckt = istGedrueckt;
   return istGedrueckt;                // nur beim Drücken true, nicht beim Loslassen
 }
+
+
+bool imuStatusAktualisieren(ImuStatus &status, bool messungOk, uint8_t schwelleFehler) {
+  if (messungOk) {
+    status.fehlerInFolge = 0;         // Messung hat geklappt: alles wieder gut
+    status.ausgefallen = false;
+    return false;
+  }
+
+  if (status.fehlerInFolge < 255) {
+    status.fehlerInFolge = status.fehlerInFolge + 1;   // bei 255 stehen bleiben (kein Überlauf)
+  }
+
+  if (schwelleFehler == 0) {
+    schwelleFehler = 1;               // Schwelle 0 gilt wie 1
+  }
+  status.ausgefallen = (status.fehlerInFolge >= schwelleFehler);
+  return status.ausgefallen;
+}
+
+
+bool fehlerMusterMotorAn(FehlerMusterZustand &zustand, bool ausfall, uint32_t jetztMs) {
+  if (!ausfall) {
+    zustand.aktiv = false;            // kein Ausfall: Muster zurücksetzen, Motor nicht wegen Fehler
+    zustand.startMs = 0;
+    return false;
+  }
+
+  if (!zustand.aktiv) {
+    zustand.aktiv = true;             // Der Ausfall beginnt gerade
+    zustand.startMs = jetztMs;
+  }
+
+  // Wie lange läuft das Muster schon in der aktuellen 5-Sekunden-Runde?
+  // Die Subtraktion funktioniert auch, wenn millis() überläuft (uint32_t).
+  uint32_t t = (jetztMs - zustand.startMs) % 5000;
+
+  // 3 Stösse: 0-100 ms, 200-300 ms, 400-500 ms. Sonst ist der Motor aus.
+  if (t < 100) {
+    return true;
+  }
+  if (t >= 200 && t < 300) {
+    return true;
+  }
+  if (t >= 400 && t < 500) {
+    return true;
+  }
+  return false;
+}
+
+
+bool motorSollAn(bool sensorAusfall, bool zuWeit, bool fehlerMusterAn) {
+  if (sensorAusfall) {
+    return fehlerMusterAn;            // Ausfall hat Vorrang: Überstreckung wird ignoriert
+  }
+  return zuWeit;
+}

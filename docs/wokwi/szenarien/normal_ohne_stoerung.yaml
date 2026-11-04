@@ -1,0 +1,20 @@
+# Normalbetrieb ohne Stoerung: kein Fehler, kein falscher Ausfall (Gegenprobe zu AK-2 und AK-8)
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "normal_ohne_stoerung"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  - delay: 6000ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  # Laufende Messung, kein Fehler: der Motor bleibt aus
+  - delay: 2000ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}

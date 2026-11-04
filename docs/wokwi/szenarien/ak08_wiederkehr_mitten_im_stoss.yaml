@@ -1,0 +1,33 @@
+# AK-7 und AK-8: Wiederkehr mitten im Stoss: Motor sofort aus, Zeile 'wieder da' ohne 'FEHLER'
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak08_wiederkehr_mitten_im_stoss"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  # Arm gestreckt. IMU 1 faellt aus.
+  - set-control: {part-id: kabel1, control: pressed, value: 0}
+  - wait-serial: "FEHLER"
+  - delay: 30ms
+  # Mitten im 1. Stoss: Motor an
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - wait-serial: "wieder da"
+  - delay: 40ms
+  # Der Stoss waere noch nicht zu Ende, aber der Ausfall ist vorbei: Motor aus (AK-8)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1500ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  # Wiederholung (Wackelkontakt): neuer Ausfall -> Muster beginnt neu, sofort an
+  - set-control: {part-id: kabel1, control: pressed, value: 0}
+  - wait-serial: "FEHLER"
+  - delay: 50ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}

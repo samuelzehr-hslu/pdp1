@@ -1,0 +1,33 @@
+# AK-10: Fehlschlag beim Einmessen -> abgebrochen, Referenz unveraendert (Arm ueberstreckt: Alarm muss bleiben)
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak10_einmessen_abbruch"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  - set-control: {part-id: imu2, control: accelX, value: 0.5}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.87}
+  - delay: 600ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  # Einmessen starten, nach 100 ms faellt IMU 2 fuer 30 ms aus (1 bis 2 Fehlschlaege, KEIN Ausfall)
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 100ms
+  - set-control: {part-id: kabel2, control: pressed, value: 0}
+  - delay: 30ms
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 20ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  # (kein wait-serial: Die Zeile kommt schon waehrend der Pausen davor. Der Text wird vom Skript pruefe_REQ-001.py im Log geprueft.)
+  - delay: 300ms
+  - delay: 1500ms
+  # Die alte Referenz (gestreckt) gilt weiter: der ueberstreckte Arm loest weiter Alarm aus.
+  # Waere neu eingemessen worden (im ueberstreckten Zustand), waere der Motor jetzt aus.
+  - expect-pin: {part-id: uno, pin: "9", value: 1}

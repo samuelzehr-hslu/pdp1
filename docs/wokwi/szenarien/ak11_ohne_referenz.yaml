@@ -1,0 +1,35 @@
+# AK-11: Start ohne IMU 2 -> keine Referenz, keine Warnung, 'Keine Referenz' alle 1000 ms, Einmessen nur per Taste
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak11_ohne_referenz"
+version: 1
+steps:
+  # Nur IMU 1 hat Kabel. IMU 2 fehlt beim Einschalten.
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - delay: 10000ms
+  # t=10000: IMU 2 wird eingesteckt
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 2000ms
+  # t=12000: Arm ueberstrecken. Es gibt keine Referenz -> KEINE Warnung
+  - set-control: {part-id: imu2, control: accelX, value: 0.5}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.87}
+  - delay: 600ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 4400ms
+  # t=17000: weiter keine Warnung (es wird nicht automatisch eingemessen)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  # Arm strecken und mit der Taste einmessen
+  - set-control: {part-id: imu2, control: accelX, value: 0}
+  - set-control: {part-id: imu2, control: accelZ, value: 1}
+  - delay: 500ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 3350ms
+  # t=21000 bis t=24000: Referenz ist da, keine Zeile 'Keine Referenz' mehr (prueft pruefe_REQ-001.py)
+  - delay: 3000ms
+  # t=24000: Arm ueberstrecken -> jetzt kommt die Warnung
+  - set-control: {part-id: imu2, control: accelX, value: 0.5}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.87}
+  - delay: 600ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}

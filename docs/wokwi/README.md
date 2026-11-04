@@ -22,7 +22,7 @@ arduino-cli compile --fqbn arduino:avr:uno --output-dir scratch/build jointsense
 Dann simulieren (aus dem Hauptordner des Repos):
 
 ```bash
-wokwi-cli docs/wokwi --diagram-file ../../jointsense/diagram.json --timeout 10000 --serial-log-file ../../scratch/wokwi-serial.log
+wokwi-cli docs/wokwi --diagram-file ../../jointsense/diagram.json --timeout 10000 --serial-log-file scratch/wokwi-serial.log
 ```
 
 Was die Optionen bedeuten:
@@ -32,14 +32,16 @@ Was die Optionen bedeuten:
 | `docs/wokwi` | Ordner mit `wokwi.toml` |
 | `--diagram-file` | Pfad zur Schaltung, relativ zu `docs/wokwi/` |
 | `--timeout 10000` | Simulation nach 10 000 ms (simulierte Zeit) beenden |
-| `--serial-log-file` | Ausgabe des Seriellen Monitors speichern |
+| `--serial-log-file` | Ausgabe des Seriellen Monitors speichern. Der Pfad zählt vom **Hauptordner** aus (nicht von `docs/wokwi/`), also `scratch/...` und nicht `../../scratch/...` (sonst stürzt `wokwi-cli` ab) |
 | `--expect-text "IMU 1 (Oberarm): OK"` | Test bestanden nur, wenn dieser Text erscheint |
 | `--fail-text "FEHLER"` | Test fehlgeschlagen, sobald dieser Text erscheint |
 | `--scenario szenarien/xyz.yaml` | Automatischer Ablauf (Taste drücken, Sensorwerte ändern) |
 
+Gut zu wissen: Sobald alle `--expect-text` gefunden sind, beendet `wokwi-cli` die Simulation sofort, auch vor Ablauf des Timeouts.
+
 ## Störfälle (für den Tester)
 
-Szenario-Dateien kommen in `docs/wokwi/szenarien/`. Typische Störfälle aus `docs/bedrohungen.md`:
+Szenario-Dateien kommen in `docs/wokwi/szenarien/` (Anleitung dort in `README.md`; für REQ-001 gibt es eine Schaltung mit «Kabeln» zum Abstecken der IMUs und das Skript `pruefe_REQ-001.py`). Typische Störfälle aus `docs/bedrohungen.md`:
 
 - IMU antwortet nicht (z. B. eigene Kopie der Schaltung ohne IMU 2 im Ordner `scratch/`) → Gerät meldet den Fehler, Motor bleibt aus.
 - Sensorwerte springen plötzlich → kein Fehlalarm, kein Absturz.

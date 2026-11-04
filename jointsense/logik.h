@@ -37,6 +37,25 @@ struct TasteZustand {
 
 
 // ---------------------------------------------------------------------
+// Zustand einer IMU (für die Ausfall-Erkennung)
+// ---------------------------------------------------------------------
+// Anlegen so:   ImuStatus imu1 = {0, false};
+struct ImuStatus {
+  uint8_t fehlerInFolge;   // wie viele Messungen in Folge sind fehlgeschlagen?
+  bool ausgefallen;        // true = IMU gilt als ausgefallen
+};
+
+// ---------------------------------------------------------------------
+// Zustand des Fehlermusters (Vibration bei Ausfall)
+// ---------------------------------------------------------------------
+// Anlegen so:   FehlerMusterZustand fehlerMuster = {false, 0};
+struct FehlerMusterZustand {
+  bool aktiv;              // läuft das Muster gerade (Ausfall dauert an)?
+  uint32_t startMs;        // Zeitpunkt (ms), an dem der Ausfall begann
+};
+
+
+// ---------------------------------------------------------------------
 // Funktionen
 // ---------------------------------------------------------------------
 
@@ -70,5 +89,27 @@ bool grenzwertPruefen(GrenzwertZustand &zustand, float abweichungGrad, uint32_t 
 //   prellMs     : so lange nach einer Änderung werden weitere Änderungen ignoriert
 bool tasteNeuGedrueckt(TasteZustand &zustand, bool istGedrueckt, uint32_t jetztMs,
                        uint32_t prellMs);
+
+// Merkt sich, ob eine IMU ausgefallen ist (REQ-001).
+//   status        : wird gelesen UND aktualisiert
+//   messungOk     : war die Messung erfolgreich?
+//   schwelleFehler: ab so vielen Fehlschlägen in Folge gilt die IMU als ausgefallen
+//                   (im Betrieb: 3; eine Schwelle von 0 wird wie 1 behandelt)
+// Eine erfolgreiche Messung setzt alles zurück. Der Zähler bleibt bei 255 stehen.
+// Rückgabe: true = die IMU gilt nach diesem Update als ausgefallen.
+bool imuStatusAktualisieren(ImuStatus &status, bool messungOk, uint8_t schwelleFehler);
+
+// Fehlermuster bei Ausfall: 3 kurze Stösse (100 ms an, 100 ms aus, ...), Start alle 5000 ms.
+//   zustand: wird gelesen UND aktualisiert
+//   ausfall: gilt gerade irgendeine IMU als ausgefallen?
+//   jetztMs: aktuelle Zeit in ms
+// Rückgabe: true = der Motor soll jetzt wegen des Fehlermusters vibrieren.
+// Ist ausfall false, wird der Zustand zurückgesetzt und false zurückgegeben.
+bool fehlerMusterMotorAn(FehlerMusterZustand &zustand, bool ausfall, uint32_t jetztMs);
+
+// Entscheidet, ob der Motor vibrieren soll.
+// Bei Ausfall zählt NUR das Fehlermuster (Ausfall hat Vorrang vor Überstreckung).
+// Ohne Ausfall zählt zuWeit (Ergebnis von grenzwertPruefen).
+bool motorSollAn(bool sensorAusfall, bool zuWeit, bool fehlerMusterAn);
 
 #endif

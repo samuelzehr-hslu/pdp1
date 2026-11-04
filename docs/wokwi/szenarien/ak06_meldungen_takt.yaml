@@ -1,0 +1,18 @@
+# AK-6: Meldungen alle 1000 ms (+-100 ms), solange der Ausfall dauert (Zaehlen macht pruefe_REQ-001.py)
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak06_meldungen_takt"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  # P = 5150 ms (Ende des Vorspanns): IMU 2 faellt aus und bleibt weg
+  - set-control: {part-id: kabel2, control: pressed, value: 0}
+  - delay: 8000ms

@@ -1,0 +1,23 @@
+# AK-2 und AK-5 (QA-05): Ausfall wird nach 3 Fehlschlaegen erkannt (nicht frueher, hoechstens 100 ms), Fehler-Vibration startet sofort
+# Gehoert zu REQ-001. Erklaerung: docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+name: "ak02_erkennung_zeit"
+version: 1
+steps:
+  # --- Vorspann (5150 ms): beide Kabel dran, Arm gestreckt, Taste = Einmessen ---
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 4000ms
+  # --- Ende Vorspann ---
+  # Arm gestreckt, Motor aus. Jetzt faellt IMU 2 aus (Zeitpunkt P).
+  - set-control: {part-id: kabel2, control: pressed, value: 0}
+  - delay: 25ms
+  # P+25 ms: hoechstens 1 Fehlschlag, noch KEIN Ausfall -> Motor noch aus (AK-2)
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 80ms
+  # P+105 ms: Ausfall muss erkannt sein, der 1. Stoss laeuft (QA-05: hoechstens 100 ms)
+  - expect-pin: {part-id: uno, pin: "9", value: 1}

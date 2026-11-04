@@ -20,8 +20,8 @@ Regeln:
 
 | Werkzeug | Version | Wozu |
 |---|---|---|
-| `arduino-cli` | `TODO` | Kompilieren (nicht hochladen!) |
-| Core `arduino:avr` | `TODO` | Unterstützung für Uno/Nano |
+| `arduino-cli` | `1.5.1` | Kompilieren (nicht hochladen!) |
+| Core `arduino:avr` | `1.8.8` | Unterstützung für Uno/Nano |
 | Arduino IDE (optional) | `TODO` | Alternative zum Bauen mit Maus |
 
 Kompilier-Befehl (Uno; beim Nano `arduino:avr:nano`):
