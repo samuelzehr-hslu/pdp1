@@ -115,7 +115,7 @@ def main():
     print("== Normalbetrieb ohne Stoerung")
     z = volllauf("normal_ohne_stoerung", fail_text="FEHLER")
     pruefe(zaehle(z, "wieder da") == 0, "Normalbetrieb: keine Zeile 'wieder da' (kein falscher Ausfall)")
-    pruefe(zaehle(z, "Keine Referenz") == 0, "Normalbetrieb: keine Zeile 'Keine Referenz'")
+    pruefe(zaehle(z, "Keine Referenz") >= 1, "Normalbetrieb (REQ-002: ohne Einmessen): Zeile 'Keine Referenz' kommt")
     pruefe(zaehle(z, "Einmessen abgebrochen") == 0, "Normalbetrieb: kein abgebrochenes Einmessen")
 
     print("== AK-2: kurze Aussetzer (1-2 Fehlschlaege) sind kein Ausfall")
@@ -126,8 +126,10 @@ def main():
     z = volllauf("ak02_erkennung_zeit")
     pruefe(fehlerzeilen(z, MUSTER_TEXT_IMU2) >= 1, "AK-6: Zeile mit FEHLER und 'IMU 2 (Unterarm)' kommt")
 
-    print("== AK-3 bis AK-9: Ausfall bei Ueberstreckung, Muster, Wiederkehr, alte Referenz")
+    print("== AK-3 bis AK-9: Ausfall bei Ueberstreckung, Muster, Wiederkehr, alte Referenz (ak04)")
+    # Vorspann: erfolgreiches Einmessen nach REQ-002 (Wokwi hat ein Gyroskop: Regler rotationX/Y/Z), erzeugt von erzeuge_einmess_szenarien.py
     z = volllauf("ak04_ausfall_bei_ueberstreckung")
+    pruefe(zaehle(z, "Einmessen abgebrochen") == 0, "ak04: Vorspann: das Einmessen hat geklappt (keine Zeile 'Einmessen abgebrochen')")
     pruefe(fehlerzeilen(z, MUSTER_TEXT_IMU2) >= 5, "AK-6: IMU 2 wird laufend gemeldet (mindestens 5 Zeilen in ca. 5 s)")
     pruefe(zaehle(z, "FEHLER", MUSTER_TEXT_IMU1) == 0, "AK-6: IMU 1 laeuft und wird NICHT als ausgefallen gemeldet")
     pruefe(zaehle(z, "wieder da") >= 1, "AK-8: Zeile 'wieder da' erscheint")
@@ -162,25 +164,29 @@ def main():
     pruefe(fehlerzeilen(z_b, MUSTER_TEXT_IMU1) - fehlerzeilen(z_a, MUSTER_TEXT_IMU1) >= 2,
            "AK-6: IMU 1 (noch weg) wird weiter alle ca. 1000 ms gemeldet")
 
-    print("== AK-7 / AK-8: Wiederkehr mitten im Stoss")
+    print("== AK-7 / AK-8: Wiederkehr mitten im Stoss (ak08)")
     z = volllauf("ak08_wiederkehr_mitten_im_stoss")
+    pruefe(zaehle(z, "Einmessen abgebrochen") == 0, "ak08: Vorspann: das Einmessen hat geklappt (keine Zeile 'Einmessen abgebrochen')")
     pruefe(zaehle(z, "wieder da") >= 1 and wieder_da_ohne_fehler(z), "AK-8: 'wieder da' ohne das Wort FEHLER")
 
     print("== AK-10: Einmessen abgebrochen")
-    z = volllauf("ak10_einmessen_abbruch", fail_text="FEHLER")
-    pruefe(zaehle(z, "Einmessen abgebrochen") >= 1, "AK-10: Zeile 'Einmessen abgebrochen'")
     z = volllauf("ak10_keine_bestaetigung", fail_text="FEHLER")
     pruefe(zaehle(z, "Einmessen abgebrochen") >= 1, "AK-10: Zeile 'Einmessen abgebrochen'")
+    # Vorspann klappt (0 Abbrueche), danach genau ein Abbruch im Szenario selbst
+    z = volllauf("ak10_einmessen_abbruch", fail_text="FEHLER")
+    pruefe(zaehle(z, "Einmessen abgebrochen") == 1, "AK-10: genau eine Zeile 'Einmessen abgebrochen' (Vorspann hat geklappt, das 2. Einmessen bricht ab)")
     z = volllauf("ak10_einmessen_bei_ausfall")
-    pruefe(zaehle(z, "Einmessen abgebrochen") >= 1, "AK-10: Einmessen waehrend des Ausfalls wird abgebrochen")
+    pruefe(zaehle(z, "Einmessen abgebrochen") == 1, "AK-10: Einmessen waehrend des Ausfalls wird abgebrochen (genau eine Zeile, Vorspann hat geklappt)")
 
     print("== AK-11: keine Referenz")
+    # Das Einmessen per Taste (t = 18000 bis 24150, Referenz bei ca. 24000) wird mit Gyroskop-Werten nachgestellt (erzeuge_einmess_szenarien.py).
     z = volllauf("ak11_ohne_referenz")
+    pruefe(zaehle(z, "Einmessen abgebrochen") == 0, "AK-11: das Einmessen per Taste hat geklappt (keine Zeile 'Einmessen abgebrochen')")
     pruefe(zaehle(z, "Keine Referenz") >= 5, "AK-11: Zeile 'Keine Referenz' kommt mehrfach")
     for (von, bis, text, kleinste, groesste) in [
         (3000, 8000, "waehrend IMU 2 fehlt", 4, 6),
         (12000, 17000, "IMU 2 ist wieder da, aber noch nicht eingemessen", 4, 6),
-        (21000, 24000, "nach dem Einmessen per Taste", 0, 0),
+        (24500, 26500, "nach dem Einmessen per Taste", 0, 0),
     ]:
         _, z_von, _ = lauf("ak11_ohne_referenz", "ak11_von%d" % von, von)
         _, z_bis, _ = lauf("ak11_ohne_referenz", "ak11_bis%d" % bis, bis)

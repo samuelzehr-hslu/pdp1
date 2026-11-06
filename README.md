@@ -28,9 +28,9 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 
 | Arduino | Verbunden mit |
 |---|---|
-| 5V | IMU 1 VCC, IMU 2 VCC, Treiber VCC |
+| 5V | Treiber VCC |
 | GND | alle GND, IMU 1 AD0 (→ Adresse `0x68`) |
-| 3V3 | IMU 2 AD0 (→ Adresse `0x69`) |
+| 3V3 | IMU 1 VCC, IMU 2 VCC, IMU 2 AD0 (→ Adresse `0x69`) |
 | A4 (SDA) | SDA beider IMUs (gemeinsamer I²C-Bus) |
 | A5 (SCL) | SCL beider IMUs |
 | D9 (PWM) | Treiber IN1 |
@@ -43,10 +43,10 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 ### Signalverarbeitung (Konzept)
 
 - Abtastrate: 50–100 Hz (Anforderung: ≥ 25 Hz)
-- Sensorfusion: Komplementärfilter bzw. integrierte Fusion (BNO085)
+- Sensorfusion: Komplementärfilter bzw. integrierte Fusion (BNO085). Beschleunigung **und** Gyroskop, damit Drehungen (Unterarm, Schulter, Schwenken) den Ellbogenwinkel nicht verfälschen (REQ-002)
 - Entprellung: 50–100 ms gegen Fehlalarme, plus kleine Hysterese gegen Flattern an der Grenze
-- Einmessen: Mittelwert über eine kurze Haltezeit, Plausibilitätsprüfung
-- Drift: Bei horizontalen Bewegungen Gelenkachse als Zusatzbedingung (Seel et al., 2014) oder Neu-Einmessen
+- Einmessen: Referenz = Mittelwert über eine kurze Haltezeit (2 s still), danach Arm genau 2 Mal beugen und strecken und dabei den Oberarm in kleinen Kreisen mitbewegen (4 s), damit das Gerät die Scharnier-Achse des Ellbogens findet, danach Hand einmal drehen (1,5 s), damit es die Knochenachse des Unterarms misst. Plausibilitätsprüfung (Arm ruhig? genug Bewegung? Achsen eindeutig?), im Zweifel Abbruch statt Raten
+- Drift: Das Gerät korrigiert die Gyro-Drift im Betrieb selbst (Ruhe erkennen, Gelenkachse als Zusatzbedingung, Seel et al., 2014). Die Referenz (0°) wird dabei nie automatisch verändert. Ziel: 10 min ± 2° ohne Neu-Einmessen
 
 ### Setup
 
@@ -61,7 +61,7 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 
 1. **Anlegen:** Sleeve über den Ellbogen ziehen, Markierung auf Gelenkmitte ausrichten.
 2. **Einschalten:** Taste lang drücken, Status-LED zeigt «aktiv».
-3. **Einmessen:** Arm entspannt strecken, Taste kurz drücken, kurze Bestätigungsvibration.
+3. **Einmessen:** Im Stehen den Arm entspannt gestreckt locker nach unten hängen lassen, Taste kurz drücken und ca. 2 s still halten. Ein kurzer Vibrationsstoss meldet «jetzt bewegen»: Arm genau 2 Mal beugen und strecken (ca. 4 s) und dabei den Oberarm in kleinen Kreisen mitbewegen. Zwei kurze Stösse melden «jetzt Hand drehen»: Hand einmal hin und zurück drehen (ca. 1,5 s, Arm sonst ruhig). Danach Bestätigungsvibration. Nach dem Einschalten muss einmal eingemessen werden (kein automatisches Einmessen).
 4. **Training:** Solange der Winkel im zulässigen Bereich bleibt, passiert nichts.
 5. **Überstreckung:** Motor vibriert, bis das Gelenk zurückgeführt wird.
 6. **Beenden:** Taste lang drücken; Elektronikmodul zum Waschen entnehmen.
@@ -70,8 +70,8 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 
 | ID | Anforderung | Zielwert |
 |---|---|---|
-| QA-01 | Messbereich / Abtastrate / Auflösung | −15° bis +100° / ≥ 25 Hz / ≤ 1° |
-| QA-02 | Einmessen der Referenz | ≤ 3 s, Wiederholgenauigkeit ± 1,5° |
+| QA-01 | Messbereich / Abtastrate / Auflösung | −100° (Beugung) bis +15° (Überstreckung) / ≥ 25 Hz / ≤ 1° |
+| QA-02 | Einmessen der Referenz | ≤ 8 s (2 s still, 4 s Beuge-Bewegung, 1,5 s Hand drehen), Wiederholgenauigkeit ± 1,5° |
 | QA-03 | Grenzwert-Einstellbereich | 0° bis +10°, Schrittweite ≤ 2° |
 | QA-04 | Erkennung Grenzwertüberschreitung | Toleranz ≤ ± 2°, Erkennungsrate ≥ 95 % |
 | QA-05 | Feedback-Latenz | ≤ 100 ms, Zuverlässigkeit ≥ 98 % |

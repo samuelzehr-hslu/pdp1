@@ -1,5 +1,13 @@
 # Wokwi-Szenarien (Störfälle)
 
+**Stand REQ-002 (Runde 2):** Wokwi hat ein **Gyroskop**. Die Regler heissen `rotationX`, `rotationY`, `rotationZ` (Grad/s) und `accelX/Y/Z` (g). `gyroX`/`gyroY`
+gibt es nicht (Wokwi meldet dafür keinen Fehler, die Werte bleiben 0: daher stand in Runde 1 fälschlich «kein Gyroskop», siehe `docs/wokwi/REQ-002-stoerfaelle.md`).
+Ein erfolgreiches Einmessen lässt sich darum nachstellen: `erzeuge_einmess_szenarien.py` rechnet die Einmess-Bewegung (Beugen/Strecken mit Oberarm-Kreisen)
+in Stufen alle 100 ms um und schreibt die Szenarien `ak04_...`, `ak08_...`, `ak10_einmessen_abbruch`, `ak10_einmessen_bei_ausfall`, `ak11_ohne_referenz`
+und `req002_w1`, `w3` bis `w6` (die `.yaml`-Dateien sind **erzeugt**, nicht von Hand ändern). Der Vorspann dieser Szenarien dauert 7400 ms (nicht mehr 5150 ms).
+Die anderen REQ-001-Szenarien (`normal_...`, `ak02_...`, `ak06_...`, `ak10_keine_bestaetigung`) brauchen keine Referenz und warten im Vorspann nur (5150 ms).
+`req002_w*.yaml` und `pruefe_REQ-002.py`: siehe `docs/wokwi/REQ-002-stoerfaelle.md`.
+
 Hier liegen die Wokwi-Szenarien zu **REQ-001** (Sensorausfall). Sie prüfen das **ganze Gerät** in der Simulation, also das,
 was man in der reinen Logik (`docs/tests/logik/`) nicht prüfen kann: Lesen der IMUs, Serielle Meldungen, Motor-Pin, Taste.
 
@@ -42,7 +50,7 @@ wokwi-cli docs/wokwi --diagram-file szenarien/diagram_kabelbruch.json --scenario
 | `normal_ohne_stoerung.yaml` | Gegenprobe (AK-2, AK-8) | Alles ok: kein `FEHLER`, kein `wieder da`, Motor aus. |
 | `ak02_kurze_aussetzer.yaml` | AK-2 | Kabel nur 30 ms weg (1 bis 2 Messungen): kein Ausfall, kein `FEHLER`, Motor bleibt aus. |
 | `ak02_erkennung_zeit.yaml` | AK-2, AK-5, QA-05 | 25 ms nach dem Kabelbruch noch kein Ausfall (Motor aus), nach 105 ms läuft der erste Stoss. |
-| `ak04_ausfall_bei_ueberstreckung.yaml` | AK-3, AK-4, AK-5, AK-6, AK-8, AK-9 | Arm ist überstreckt (Motor an), Kabelbruch: Warnung geht aus, Muster 3 Stösse (an 100 / aus 100 ...) und nach 5 s von vorn. Kabel wieder dran: Motor sofort aus, kein Sofort-Alarm, danach kommt der Alarm mit der alten Referenz zurück. |
+| `ak04_ausfall_bei_ueberstreckung.yaml` | AK-3, AK-4, AK-5, AK-6, AK-8, AK-9 (und REQ-002 AK-13) | Arm ist überstreckt (Motor an), Kabelbruch: Warnung geht aus, Muster 3 Stösse (an 100 / aus 100 ...) und nach 5 s von vorn. Kabel wieder dran: Motor sofort aus, kein Sofort-Alarm, nach spätestens 5 s kommt der Alarm mit der alten Referenz zurück (REQ-002 AK-13). |
 | `ak06_meldungen_takt.yaml` | AK-6 | Takt der Meldungen: das Skript bricht das Szenario zu verschiedenen Zeiten ab und zählt die Zeilen (1000 ms ± 100 ms). |
 | `ak06_beide_ausfall.yaml` | AK-6, AK-8 | Beide IMUs weg: beide werden gemeldet. Kommt nur eine zurück, dauert der Ausfall an. Erst wenn beide da sind: `wieder da`. |
 | `ak08_wiederkehr_mitten_im_stoss.yaml` | AK-7, AK-8 | Kabel wieder dran mitten im Stoss: Motor sofort aus. Danach erneuter Ausfall startet das Muster neu. |

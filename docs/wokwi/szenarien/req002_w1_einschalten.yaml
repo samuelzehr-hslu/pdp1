@@ -1,0 +1,32 @@
+# W1: Einschalten ohne Einmessen, Zykluszeit, schnelles Drehen und Uebersteuerung (AK-9, AK-14, AK-15)
+# Gehoert zu REQ-002. Erklaerung: docs/wokwi/REQ-002-stoerfaelle.md und docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+# ERZEUGT mit docs/wokwi/szenarien/erzeuge_einmess_szenarien.py (nicht von Hand aendern, Skript anpassen).
+name: "req002_w1_einschalten"
+version: 1
+steps:
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: imu2, control: accelX, value: 0.5}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.866}
+  - delay: 1000ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1000ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1000ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - set-control: {part-id: imu2, control: rotationX, value: 250}
+  - delay: 500ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - set-control: {part-id: imu2, control: rotationX, value: -1000}
+  - delay: 300ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 300ms
+  - set-control: {part-id: imu2, control: rotationX, value: 1000}
+  - delay: 300ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 300ms
+  - set-control: {part-id: imu2, control: rotationX, value: 0}
+  - delay: 1500ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}

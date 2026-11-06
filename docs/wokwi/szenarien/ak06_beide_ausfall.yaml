@@ -8,10 +8,9 @@ steps:
   - set-control: {part-id: kabel1, control: pressed, value: 1}
   - set-control: {part-id: kabel2, control: pressed, value: 1}
   - delay: 1000ms
-  - set-control: {part-id: taste, control: pressed, value: 1}
-  - delay: 150ms
-  - set-control: {part-id: taste, control: pressed, value: 0}
-  - delay: 4000ms
+  # REQ-002: Das Einmessen im Vorspann entfaellt. Wokwi liefert kein Gyroskop (immer 0), darum findet
+  # die Firmware keine Scharnier-Achse und das Einmessen klappt in Wokwi nie. Der Vorspann wartet nur (Zeit bleibt 5150 ms).
+  - delay: 4150ms
   # --- Ende Vorspann ---
   # Zeiten ab Ende des Vorspanns (5150 ms): IMU 1 weg bei +0, IMU 2 weg bei +1000
   - set-control: {part-id: kabel1, control: pressed, value: 0}

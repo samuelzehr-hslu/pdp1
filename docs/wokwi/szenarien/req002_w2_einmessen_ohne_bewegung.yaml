@@ -1,0 +1,30 @@
+# W2: Einmessen ohne Beuge-Bewegung -> Abbruch Beugung (AK-6, AK-7a)
+# Gehoert zu REQ-002. Erklaerung: docs/wokwi/REQ-002-stoerfaelle.md und docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran). Pin 9 = Motor. t0 = Tastendruck (1000 ms nach Start).
+name: "req002_w2_einmessen_ohne_bewegung"
+version: 1
+steps:
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 1800ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 1}
+  - delay: 150ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1900ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1975ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 1000ms
+  - set-control: {part-id: imu2, control: accelX, value: 0.5000}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.8660}
+  - delay: 700ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms

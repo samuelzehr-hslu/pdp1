@@ -1,0 +1,182 @@
+# W6: Oberarm haengt in Phase 2 still -> Abbruch 'Oberarm' (AK-7d)
+# Gehoert zu REQ-002. Erklaerung: docs/wokwi/REQ-002-stoerfaelle.md und docs/wokwi/szenarien/README.md
+# Kabel = Taster in der SDA-Leitung (pressed 1 = Kabel dran, 0 = Kabel ab). Pin 9 = Motor.
+# ERZEUGT mit docs/wokwi/szenarien/erzeuge_einmess_szenarien.py (nicht von Hand aendern, Skript anpassen).
+name: "req002_w6_oberarm_still"
+version: 1
+steps:
+  - set-control: {part-id: kabel1, control: pressed, value: 1}
+  - set-control: {part-id: kabel2, control: pressed, value: 1}
+  - delay: 1000ms
+  - set-control: {part-id: taste, control: pressed, value: 1}
+  - delay: 150ms
+  - set-control: {part-id: taste, control: pressed, value: 0}
+  - delay: 1950ms
+  - set-control: {part-id: imu1, control: accelX, value: 0}
+  - set-control: {part-id: imu1, control: accelY, value: 0}
+  - set-control: {part-id: imu1, control: accelZ, value: 1}
+  - set-control: {part-id: imu1, control: rotationX, value: 0}
+  - set-control: {part-id: imu1, control: rotationY, value: 0}
+  - set-control: {part-id: imu1, control: rotationZ, value: 0}
+  - set-control: {part-id: imu2, control: accelX, value: -0.0083}
+  - set-control: {part-id: imu2, control: accelY, value: 0}
+  - set-control: {part-id: imu2, control: accelZ, value: 1}
+  - set-control: {part-id: imu2, control: rotationX, value: 0}
+  - set-control: {part-id: imu2, control: rotationY, value: 18.964}
+  - set-control: {part-id: imu2, control: rotationZ, value: 0}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0736}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9973}
+  - set-control: {part-id: imu2, control: rotationY, value: 54.837}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.1959}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9806}
+  - set-control: {part-id: imu2, control: rotationY, value: 84.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.3574}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.934}
+  - set-control: {part-id: imu2, control: rotationY, value: 105.512}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.5315}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.847}
+  - set-control: {part-id: imu2, control: rotationY, value: 114.823}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.6895}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.7243}
+  - set-control: {part-id: imu2, control: rotationY, value: 111.691}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.8105}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.5858}
+  - set-control: {part-id: imu2, control: rotationY, value: 96.455}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.888}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.4599}
+  - set-control: {part-id: imu2, control: rotationY, value: 70.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9279}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.3729}
+  - set-control: {part-id: imu2, control: rotationY, value: 37.411}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9397}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.342}
+  - set-control: {part-id: imu2, control: rotationY, value: 0}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9279}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.3729}
+  - set-control: {part-id: imu2, control: rotationY, value: -37.411}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.888}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.4599}
+  - set-control: {part-id: imu2, control: rotationY, value: -70.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.8105}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.5858}
+  - set-control: {part-id: imu2, control: rotationY, value: -96.455}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.6895}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.7243}
+  - set-control: {part-id: imu2, control: rotationY, value: -111.691}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.5315}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.847}
+  - set-control: {part-id: imu2, control: rotationY, value: -114.823}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.3574}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.934}
+  - set-control: {part-id: imu2, control: rotationY, value: -105.512}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.1959}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9806}
+  - set-control: {part-id: imu2, control: rotationY, value: -84.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0736}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9973}
+  - set-control: {part-id: imu2, control: rotationY, value: -54.837}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0083}
+  - set-control: {part-id: imu2, control: accelZ, value: 1}
+  - set-control: {part-id: imu2, control: rotationY, value: -18.964}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: rotationY, value: 18.964}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0736}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9973}
+  - set-control: {part-id: imu2, control: rotationY, value: 54.837}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.1959}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9806}
+  - set-control: {part-id: imu2, control: rotationY, value: 84.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.3574}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.934}
+  - set-control: {part-id: imu2, control: rotationY, value: 105.512}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.5315}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.847}
+  - set-control: {part-id: imu2, control: rotationY, value: 114.823}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.6895}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.7243}
+  - set-control: {part-id: imu2, control: rotationY, value: 111.691}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.8105}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.5858}
+  - set-control: {part-id: imu2, control: rotationY, value: 96.455}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.888}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.4599}
+  - set-control: {part-id: imu2, control: rotationY, value: 70.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9279}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.3729}
+  - set-control: {part-id: imu2, control: rotationY, value: 37.411}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9397}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.342}
+  - set-control: {part-id: imu2, control: rotationY, value: 0}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.9279}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.3729}
+  - set-control: {part-id: imu2, control: rotationY, value: -37.411}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.888}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.4599}
+  - set-control: {part-id: imu2, control: rotationY, value: -70.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.8105}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.5858}
+  - set-control: {part-id: imu2, control: rotationY, value: -96.455}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.6895}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.7243}
+  - set-control: {part-id: imu2, control: rotationY, value: -111.691}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.5315}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.847}
+  - set-control: {part-id: imu2, control: rotationY, value: -114.823}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.3574}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.934}
+  - set-control: {part-id: imu2, control: rotationY, value: -105.512}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.1959}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9806}
+  - set-control: {part-id: imu2, control: rotationY, value: -84.767}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0736}
+  - set-control: {part-id: imu2, control: accelZ, value: 0.9973}
+  - set-control: {part-id: imu2, control: rotationY, value: -54.837}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: -0.0083}
+  - set-control: {part-id: imu2, control: accelZ, value: 1}
+  - set-control: {part-id: imu2, control: rotationY, value: -18.964}
+  - delay: 100ms
+  - set-control: {part-id: imu2, control: accelX, value: 0}
+  - set-control: {part-id: imu2, control: rotationY, value: 0}
+  - delay: 175ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 225ms
+  - expect-pin: {part-id: uno, pin: "9", value: 0}
+  - delay: 100ms

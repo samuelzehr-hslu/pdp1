@@ -23,6 +23,7 @@ Der Arduino hat **kein WLAN und kein Internet**. Angreifen oder stören kann man
 | B-3 | **Lahmlegen** | I²C-Bus hängt, Speicher (RAM) wird voll | Gerät reagiert nicht mehr, Warnung fällt aus | `Wire.setWireTimeout`, eventuell Watchdog, keine dynamische Speicherverwaltung, RAM-Belegung im Blick | offen |
 | B-4 | **Unsichere Bibliotheken** | Fremde oder veraltete Bibliothek aus unbekannter Quelle | Fehler oder Schadcode im eigenen Programm | Nur offizieller Library Manager, feste Version in `docs/tech-stack.md` | offen |
 | B-5 | **Neues Programm per USB aufspielen** | Jemand mit USB-Kabel lädt eine eigene Firmware hoch | Gerät macht etwas anderes | Auf Uno/Nano technisch **nicht** verhinderbar (kein Schutz für das Aufspielen vorhanden) | **akzeptiertes Risiko** |
+| B-6 | **Falsche Einmessung oder Selbstkorrektur** | Einmess-Bewegung zu klein, Scharnier-Achse falsch bestimmt; Drift-Korrektur «lernt» eine gehaltene Überstreckung als normal; nach IMU-Ausfall ist die Lage unbekannt | Winkel stimmt nicht, Warnung fällt aus oder kommt ohne Grund | Einmessen bei zu kleiner Bewegung abbrechen, Referenz nie automatisch ändern, nach Ausfall keine Warnung bis die Lage wieder bekannt ist (REQ-002) | offen |
 
 Status-Werte: *offen* (noch nicht geprüft), *geschützt*, *nicht geschützt*, *akzeptiertes Risiko*.
 
