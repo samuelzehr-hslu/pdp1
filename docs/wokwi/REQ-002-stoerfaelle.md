@@ -1,5 +1,13 @@
 # Wokwi-Prüfung zu REQ-002 (Beschreibung der Störfälle)
 
+> **ÜBERHOLT (Neustart Runde 0, Phase 3 «Achse messen»):** Die Szenarien W1 bis W6 und der Vorspann der REQ-001-Szenarien
+> gehen noch vom alten Ablauf aus (Einmessen 6000 ms, Bestätigung bei t0 + 6000 ms, kein Phase 3, kein `Grund: Hand`).
+> Neu dauert das Einmessen 7500 ms ± 100 ms (Phase 3 von t0 + 6000 bis t0 + 7500: zwei Stösse 100/100/100 ms am Anfang, Hand drehen),
+> die Bestätigung (150 ms) kommt danach. Wokwi-Kontingent ist aufgebraucht, darum **nicht angepasst und nicht ausgeführt**.
+> Was nur in Wokwi oder am Board prüfbar ist (Zeiten, Stösse, Meldungstexte `Grund: …` inkl. `Hand`, Reihenfolge der Gründe,
+> Gesamtdauer 7500 ms, Übersteuerung, `Zyklus max`) bleibt bis dahin «nicht geprüft» bzw. Board-Test.
+> Die Winkel-Logik (AK-1 bis AK-14, AK-16) läuft unabhängig davon auf dem PC.
+
 **Stand Runde 2 (Auftrag 1c, Anforderung geändert):** Die Szenarien liegen in `szenarien/req002_w*.yaml` und laufen mit
 `python docs/wokwi/szenarien/pruefe_REQ-002.py` (Auftrag 2). Die Dateien mit Bewegung (W3 bis W6) werden von
 `szenarien/erzeuge_einmess_szenarien.py` erzeugt, nicht von Hand geschrieben.

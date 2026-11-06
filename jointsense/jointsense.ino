@@ -9,9 +9,12 @@
 //      Andere Drehungen (Hand drehen, Schulter drehen, Arm schwenken) ändern ihn nicht.
 //   3. Einmessen (Taste kurz drücken): 2 s Arm still gestreckt (hängend) = Referenz (0 Grad).
 //      Ein Vibrationsstoss meldet "jetzt bewegen": 4 s Arm 2 Mal beugen und strecken
-//      und dabei den Oberarm leicht mitbewegen (kleine Kreise), damit das Gerät die
+//      und dabei den Oberarm leicht mitbewegen (ein kleiner Kreis von mindestens 15 Grad), damit das Gerät die
 //      Scharnier-Achse findet. Ist sie nicht eindeutig (z. B. Oberarm still), bricht
-//      das Einmessen ab ("Grund: Oberarm"). Sonst gibt es die Bestätigungsvibration.
+//      das Einmessen ab ("Grund: Oberarm").
+//      Dann zwei kurze Stösse meldet "jetzt Hand drehen": 1,5 s Unterarm einmal hin und
+//      zurück drehen. Daraus misst das Gerät die Knochenachse des Unterarms ("Grund: Hand",
+//      wenn die Hand nicht gedreht wurde). Sonst gibt es die Bestätigungsvibration.
 //      Nach dem Einschalten gibt es KEINE automatische Einmessung.
 //   4. Ist der Arm mehr als GRENZWERT_GRAD über der Referenz -> Motor vibriert.
 //   5. Antwortet eine IMU 3 Mal in Folge nicht (REQ-001), gilt sie als ausgefallen:
@@ -42,9 +45,11 @@ const unsigned long ZYKLUS_MELDUNG_MS = 1000;   // "Zyklus max" wird alle 1000 m
 const unsigned long IMU_BEREICH_MS = 1000;      // so oft wird der Messbereich der IMUs neu eingestellt
 
 // Einmessen (README: "Bedienung", AK-6 und AK-7)
-const unsigned long EINMESS_STILL_MS  = 2000;   // Phase 1: Arm still halten
-const unsigned long EINMESS_GESAMT_MS = 6000;   // Phase 1 + Phase 2 (4000 ms Bewegung)
-const unsigned long STOSS_BEWEGUNG_MS = 100;    // Vibrationsstoss "jetzt bewegen"
+const unsigned long EINMESS_STILL_MS  = 2000;   // Phase 1: Arm still halten (0 bis 2000 ms)
+const unsigned long EINMESS_DREHUNG_MS = 6000;  // Phase 3 (Hand drehen) beginnt; davor Phase 2 (Bewegung, 4000 ms)
+const unsigned long EINMESS_GESAMT_MS = 7500;   // Ende von Phase 3: danach wird ausgewertet
+const unsigned long STOSS_BEWEGUNG_MS = 100;    // Vibrationsstoss "jetzt bewegen" (und jeder Stoss von Phase 3)
+const unsigned long STOSS_ABSTAND_MS = 200;     // Phase 3: zweiter Stoss beginnt 200 ms nach dem ersten (100 aus, 100 an)
 const unsigned long STOSS_BESTAETIGUNG_MS = 150; // Bestätigungsvibration am Ende
 const float EINMESS_MIN_BEUGUNG_GRAD = 30.0;    // so gross muss die Beugung beim Einmessen sein
 
@@ -78,6 +83,8 @@ unsigned long einmessStartMs = 0;    // Zeitpunkt, an dem die Taste gedrückt wu
 // Vibrationsstoss (z. B. 100 ms oder 150 ms), ohne Warten
 bool stossAktiv = false;             // läuft gerade ein Vibrationsstoss?
 unsigned long stossEndeMs = 0;       // wann endet er?
+bool zweiterStossOffen = false;      // kommt in Phase 3 noch ein zweiter Stoss?
+unsigned long zweiterStossMs = 0;    // wann beginnt dieser zweite Stoss?
 
 
 // Läuft einmal beim Start.
@@ -119,6 +126,12 @@ void loop() {
   // Vibrationsstoss beenden, wenn seine Zeit um ist (läuft bei jedem Durchgang)
   stossPruefen(jetzt);
 
+  // Zweiter Stoss des Doppelstosses (Beginn von Phase 3, "Hand drehen")
+  if (zweiterStossOffen && (long)(jetzt - zweiterStossMs) >= 0) {
+    zweiterStossOffen = false;
+    stossStarten(jetzt, STOSS_BEWEGUNG_MS);
+  }
+
   // Taste: kurzer Druck startet das Einmessen (nur wenn nicht schon eines läuft)
   if (tasteGedrueckt() && einmessPhase == 0) {
     einmessenBeginnen(jetzt);
@@ -136,6 +149,16 @@ void loop() {
     einmessPhase = 2;
     stossStarten(jetzt, STOSS_BEWEGUNG_MS);
     Serial.println(F("Jetzt Arm 2 Mal beugen und strecken."));
+  }
+
+  // Einmessen: nach 6000 ms beginnt Phase 3 (Hand drehen) mit zwei kurzen Stössen
+  if (einmessPhase == 2 && (jetzt - einmessStartMs) >= EINMESS_DREHUNG_MS) {
+    einmessenDrehungStart(ellbogen);
+    einmessPhase = 3;
+    stossStarten(jetzt, STOSS_BEWEGUNG_MS);   // 1. Stoss: 100 ms an
+    zweiterStossOffen = true;                 // 2. Stoss: 100 ms aus, dann 100 ms an
+    zweiterStossMs = jetzt + STOSS_ABSTAND_MS;
+    Serial.println(F("Jetzt Hand einmal hin und zurueck drehen."));
   }
 
   // Alle 1000 ms den Messbereich der IMUs neu einstellen (falls eine IMU kurz neu gestartet ist)
@@ -239,8 +262,8 @@ void loop() {
     // bei den Stössen (Zeichen "jetzt bewegen" und Bestätigung).
     grenzZustand.warnungAktiv = false;
     grenzZustand.zuWeitSeit = 0;
-    // Nach 6000 ms ist das Einmessen fertig
-    if (zyklusVerwendet && winkelAktualisiert && einmessPhase == 2 &&
+    // Nach 7500 ms (Ende von Phase 3) ist das Einmessen fertig
+    if (zyklusVerwendet && winkelAktualisiert && einmessPhase == 3 &&
         (jetzt - einmessStartMs) >= EINMESS_GESAMT_MS) {
       einmessenFertig(jetzt);
     }
@@ -387,7 +410,7 @@ void einmessenBeginnen(unsigned long jetzt) {
   Serial.println(F("Einmessen... Arm ruhig gestreckt halten."));
 }
 
-// Schliesst das Einmessen nach 6000 ms ab: Bestätigung oder Abbruch-Meldung.
+// Schliesst das Einmessen nach 7500 ms ab: Bestätigung oder Abbruch-Meldung.
 void einmessenFertig(unsigned long jetzt) {
   bool ok = einmessenAbschliessen(ellbogen, EINMESS_MIN_BEUGUNG_GRAD);
   einmessPhase = 0;
@@ -408,6 +431,7 @@ void einmessenAbbrechenMelden(uint8_t grund) {
   einmessenAbbrechen(ellbogen);
   einmessPhase = 0;
   stossAktiv = false;
+  zweiterStossOffen = false;              // ein geplanter zweiter Stoss entfällt
   feedbackAusgeben(false);
   einmessenAbbruchMelden(grund);
 }
@@ -421,6 +445,8 @@ void einmessenAbbruchMelden(uint8_t grund) {
     Serial.println(F("ruhig"));
   } else if (grund == EINMESSEN_GRUND_OBERARM) {
     Serial.println(F("Oberarm"));
+  } else if (grund == EINMESSEN_GRUND_HAND) {
+    Serial.println(F("Hand"));
   } else {
     Serial.println(F("IMU"));
   }

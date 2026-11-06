@@ -45,7 +45,7 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 - Abtastrate: 50–100 Hz (Anforderung: ≥ 25 Hz)
 - Sensorfusion: Komplementärfilter bzw. integrierte Fusion (BNO085). Beschleunigung **und** Gyroskop, damit Drehungen (Unterarm, Schulter, Schwenken) den Ellbogenwinkel nicht verfälschen (REQ-002)
 - Entprellung: 50–100 ms gegen Fehlalarme, plus kleine Hysterese gegen Flattern an der Grenze
-- Einmessen: Referenz = Mittelwert über eine kurze Haltezeit (2 s still), danach Arm genau 2 Mal beugen und strecken und dabei den Oberarm in kleinen Kreisen mitbewegen (4 s), damit das Gerät die Scharnier-Achse des Ellbogens findet, danach Hand einmal drehen (1,5 s), damit es die Knochenachse des Unterarms misst. Plausibilitätsprüfung (Arm ruhig? genug Bewegung? Achsen eindeutig?), im Zweifel Abbruch statt Raten
+- Einmessen: Referenz = Mittelwert über eine kurze Haltezeit (2 s still), danach Arm genau 2 Mal beugen und strecken und dabei den Oberarm in einem kleinen Kreis mitbewegen (4 s), damit das Gerät die Scharnier-Achse des Ellbogens findet, danach Hand einmal drehen (1,5 s), damit es die Knochenachse des Unterarms misst. Plausibilitätsprüfung (Arm ruhig? genug Bewegung? Achsen eindeutig?), im Zweifel Abbruch statt Raten
 - Drift: Das Gerät korrigiert die Gyro-Drift im Betrieb selbst (Ruhe erkennen, Gelenkachse als Zusatzbedingung, Seel et al., 2014). Die Referenz (0°) wird dabei nie automatisch verändert. Ziel: 10 min ± 2° ohne Neu-Einmessen
 
 ### Setup

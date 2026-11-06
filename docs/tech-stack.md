@@ -56,8 +56,9 @@ Keine neue Bibliothek. Es wird nur `math.h` aus dem Arduino-Core (avr-libc) benu
 | Teil | Wert | Grund |
 |---|---|---|
 | Lage der IMUs zueinander | Quaternion (4 `float`), von beiden Gyros weitergedreht, von der Schwerkraft korrigiert | Drehungen um Knochenachsen ändern den Ellbogenwinkel nicht, auch nicht bei mehreren Bewegungen gleichzeitig |
-| Flash (Uno) | 31882 von 32256 Byte (98 %) | Grenze 32256 Byte. Die Suche nach der Scharnier-Achse braucht ca. 9 KB, darum keine weiteren Funktionen ohne Platzprüfung |
-| RAM (globale Variablen) | 1182 von 2048 Byte (57 %) | Grenze 70 % = 1434 Byte (AK-15) |
+| Flash (Uno) | 28822 von 32256 Byte (89 %), gemessen mit `arduino-cli 1.5.1` (REQ-002 Runde 2 neu) | Grenze 32256 Byte. Die Achsen-Suche (Jacobi-Verfahren) braucht weniger Platz als die frühere Matrix-Inversion |
+| RAM (globale Variablen) | 1155 von 2048 Byte (56 %), 893 Byte für lokale Variablen frei | Grenze 70 % = 1434 Byte (AK-15). Die Achsen-Suche hat zwei lokale 6x6-Felder (je 144 Byte) auf dem Stapel, keine globalen Variablen |
+| Achsen-Suche (REQ-002 Runde 2) | Jacobi-Verfahren (cyclisch, 6x6, `logik.cpp`) | Ohne Matrix-Inversion: die alte Inversion war bei fast flachen Daten ungenau und liess die Achse je nach Einbaudrehung falsch ausfallen (Abbruch «Oberarm») |
 | `NICHT_INLINE` in `logik.cpp` | `__attribute__((noinline))` | Spart Flash, weil der Compiler die Hilfsfunktionen nicht überall hineinkopiert |
 
 ## Test-Werkzeuge

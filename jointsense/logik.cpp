@@ -673,20 +673,6 @@ NICHT_INLINE static void matrixZaehlen(float *mat, int n, const float *p, float 
   }
 }
 
-// Rechnet x^T * M * x für eine Matrix M, die nur mit ihrer oberen Hälfte gespeichert ist (n x n).
-NICHT_INLINE static float formWert(const float *mat, int n, const float *x) {
-  float summe = 0.0f;
-  int index = 0;
-  for (int a = 0; a < n; a++) {
-    for (int b = a; b < n; b++) {
-      float f = (a == b) ? 1.0f : 2.0f;
-      summe += f * mat[index] * x[a] * x[b];
-      index++;
-    }
-  }
-  return summe;
-}
-
 // Merkt die Drehung beider IMUs seit Beginn von Phase 2 als Zwischenwert (für die Beuge-Prüfung am Ende).
 NICHT_INLINE static void zwischenMerken(EllbogenZustand &z) {
   for (int i = 0; i < 8; i++) {
@@ -799,92 +785,107 @@ NICHT_INLINE static void phase2Sammeln(EllbogenZustand &z, const float *a1, cons
   }
 }
 
-// Sucht den kleinsten und den zweitkleinsten Eigenwert der 6x6-Matrix (nur obere Hälfte gespeichert)
-// mit der inversen Iteration. x1 = Eigenvektor zum kleinsten Wert (Länge 1).
-// Der kleinste Wert (lam1) sagt, wie gut die Daten passen (0 = perfekt), der zweitkleinste (lam2),
-// wie sicher die Achse bestimmt ist (gross = eindeutig). false, wenn die Rechnung nicht geht.
+// Jacobi-Verfahren: Findet alle Eigenwerte und Eigenvektoren einer symmetrischen 6x6-Matrix.
+// Es wird NICHTS invertiert. Das ist genau und stabil, auch wenn die Matrix fast "flach" ist
+// (ein Eigenwert nahe 0). Die frühere Matrix-Inversion war dort ungenau, und die Achse wurde
+// je nach Einbaudrehung falsch (Abbruch "Oberarm").
+//   a : die Matrix (wird dabei verändert; am Ende stehen die Eigenwerte auf der Diagonale)
+//   v : Ausgabe, die Eigenvektoren als Spalten
+NICHT_INLINE static void jacobiEigen(float a[6][6], float v[6][6]) {
+  // v am Anfang = Einheitsmatrix
+  for (int i = 0; i < 6; i++) {
+    for (int j = 0; j < 6; j++) {
+      v[i][j] = (i == j) ? 1.0f : 0.0f;
+    }
+  }
+  // Höchstens 12 Durchgänge (meist reichen 5 bis 6)
+  for (int runde = 0; runde < 12; runde++) {
+    // Wie gross sind die Werte neben der Diagonale noch? Klein genug = fertig.
+    float aussen = 0.0f;
+    float spur = 0.0f;
+    for (int p = 0; p < 6; p++) {
+      spur += fabsf(a[p][p]);
+      for (int q = p + 1; q < 6; q++) {
+        aussen += a[p][q] * a[p][q];
+      }
+    }
+    if (!(aussen > 1.0e-12f * spur * spur)) {
+      break;                              // fertig (bei NaN auch; der Aufrufer prüft das)
+    }
+    // Jedes Paar (p, q) der Reihe nach so drehen, dass der Wert neben der Diagonale null wird
+    for (int p = 0; p < 5; p++) {
+      for (int q = p + 1; q < 6; q++) {
+        if (a[p][q] == 0.0f) {
+          continue;
+        }
+        float theta = (a[q][q] - a[p][p]) / (2.0f * a[p][q]);
+        float t = 1.0f / (fabsf(theta) + sqrtf(theta * theta + 1.0f));
+        if (theta < 0.0f) {
+          t = -t;
+        }
+        float c = 1.0f / sqrtf(t * t + 1.0f);   // Cosinus des Drehwinkels
+        float s = t * c;                         // Sinus des Drehwinkels
+        // Spalten p und q drehen
+        for (int k = 0; k < 6; k++) {
+          float akp = a[k][p];
+          float akq = a[k][q];
+          a[k][p] = c * akp - s * akq;
+          a[k][q] = s * akp + c * akq;
+        }
+        // Zeilen p und q drehen (die Matrix bleibt symmetrisch)
+        for (int k = 0; k < 6; k++) {
+          float apk = a[p][k];
+          float aqk = a[q][k];
+          a[p][k] = c * apk - s * aqk;
+          a[q][k] = s * apk + c * aqk;
+        }
+        // Die Eigenvektoren mitdrehen
+        for (int k = 0; k < 6; k++) {
+          float vkp = v[k][p];
+          float vkq = v[k][q];
+          v[k][p] = c * vkp - s * vkq;
+          v[k][q] = s * vkp + c * vkq;
+        }
+      }
+    }
+  }
+}
+
+// Sucht die Scharnier-Achse: den Eigenvektor zum kleinsten Eigenwert der 6x6-Matrix
+// (nur obere Hälfte gespeichert). x1 = dieser Eigenvektor (Länge 1).
+// lam1 = kleinster Eigenwert (0 = die Daten passen perfekt), lam2 = zweitkleinster
+// (gross = die Achse ist eindeutig). false, wenn die Rechnung nicht geht (NaN, unendlich).
 NICHT_INLINE static bool eigenKleinste(const float *mat, float *x1, float &lam1, float &lam2) {
   float a[6][6];
+  float v[6][6];
   int idx = 0;
-  float spur = 0.0f;
   for (int i = 0; i < 6; i++) {
     for (int j = i; j < 6; j++) {
       a[i][j] = mat[idx];
       a[j][i] = mat[idx];
       idx++;
     }
-    spur += a[i][i];
   }
-  if (!(spur > 0.0f)) {
-    return false;
+  jacobiEigen(a, v);
+  // Den kleinsten und den zweitkleinsten Eigenwert (auf der Diagonale) suchen
+  int k1 = 0;
+  for (int i = 1; i < 6; i++) {
+    if (a[i][i] < a[k1][k1]) {
+      k1 = i;
+    }
   }
+  int k2 = (k1 == 0) ? 1 : 0;
   for (int i = 0; i < 6; i++) {
-    a[i][i] += 1.0e-6f * spur;            // verhindert eine unlösbare Matrix
-  }
-  // Matrix umkehren (Gauss-Jordan, in der Matrix selbst)
-  for (int k = 0; k < 6; k++) {
-    float piv = a[k][k];
-    if (!(piv > 0.0f)) {
-      return false;
-    }
-    a[k][k] = 1.0f;
-    for (int j = 0; j < 6; j++) {
-      a[k][j] /= piv;
-    }
-    for (int i = 0; i < 6; i++) {
-      if (i != k) {
-        float f = a[i][k];
-        a[i][k] = 0.0f;
-        for (int j = 0; j < 6; j++) {
-          a[i][j] -= f * a[k][j];
-        }
-      }
+    if (i != k1 && a[i][i] < a[k2][k2]) {
+      k2 = i;
     }
   }
-  float x[6];
-  for (int durchgang = 0; durchgang < 2; durchgang++) {
-    for (int i = 0; i < 6; i++) {
-      x[i] = 0.3f + 0.1f * (float)i;
-    }
-    for (int runde = 0; runde < 40; runde++) {
-      float y[6];
-      float n2 = 0.0f;
-      for (int i = 0; i < 6; i++) {
-        y[i] = 0.0f;
-        for (int k = 0; k < 6; k++) {
-          y[i] += a[i][k] * x[k];
-        }
-      }
-      if (durchgang == 1) {               // zweiter Durchgang: den ersten Eigenvektor herausrechnen
-        float s = 0.0f;
-        for (int i = 0; i < 6; i++) {
-          s += y[i] * x1[i];
-        }
-        for (int i = 0; i < 6; i++) {
-          y[i] -= s * x1[i];
-        }
-      }
-      for (int i = 0; i < 6; i++) {
-        n2 += y[i] * y[i];
-      }
-      if (!(n2 > 0.0f) || isinf(n2)) {
-        return false;
-      }
-      float f = 1.0f / sqrtf(n2);
-      for (int i = 0; i < 6; i++) {
-        x[i] = y[i] * f;
-      }
-    }
-    if (durchgang == 0) {
-      for (int i = 0; i < 6; i++) {
-        x1[i] = x[i];
-      }
-      lam1 = formWert(mat, 6, x);
-    } else {
-      lam2 = formWert(mat, 6, x);
-    }
+  lam1 = a[k1][k1];
+  lam2 = a[k2][k2];
+  for (int i = 0; i < 6; i++) {
+    x1[i] = v[i][k1];
   }
-  return !(isnan(lam1) || isnan(lam2));
+  return !(isnan(lam1) || isnan(lam2) || isinf(lam1) || isinf(lam2));
 }
 
 

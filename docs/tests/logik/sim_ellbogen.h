@@ -154,8 +154,8 @@ struct Pose {
 };
 
 // Art der Oberarm-Bewegung in Phase 2 des Einmessens (siehe oberarmBewegen weiter unten).
-// OBERARM_KREISE = ein Umlauf in 4 s, OBERARM_KREISE2 = zwei Umläufe in 4 s (zu zwei Beugungen passend).
-enum { OBERARM_NICHTS = 0, OBERARM_PENDELN = 1, OBERARM_KREISE = 2, OBERARM_SENKRECHT = 3, OBERARM_KREISE2 = 4 };
+// OBERARM_KREISE = ein kleiner Kreis (ein Umlauf in 4 s), so verlangt es AK-6 (Stand: 1 Umlauf).
+enum { OBERARM_NICHTS = 0, OBERARM_PENDELN = 1, OBERARM_KREISE = 2, OBERARM_SENKRECHT = 3 };
 
 typedef std::function<Pose(double)> Bewegung;                         // Zeit in s -> Pose
 typedef std::function<Pose(double, const Pose &)> Danach;              // Zeit seit Ende Einmessen, Pose am Ende des Einmessens
@@ -330,13 +330,9 @@ inline void oberarmBewegen(Pose &p, double s, int art, double grad) {
     // vor und zurück um eine waagrechte Achse (z. B. Arm hängt und schwingt nach vorn), Drehung = grad
     p.pitch = p.pitch - grad * 0.5 * (1.0 - std::cos(w));
   } else if (art == OBERARM_KREISE) {
-    // kleine Kreise: Pendeln nach vorn und zur Seite zugleich, beide Drehungen um waagrechte Achsen
+    // ein kleiner Kreis: Pendeln nach vorn und zur Seite zugleich, beide Drehungen um waagrechte Achsen
     p.pitch = p.pitch - grad * 0.5 * (1.0 - std::cos(w));
     p.seit = p.seit + grad * 0.5 * std::sin(w);
-  } else if (art == OBERARM_KREISE2) {
-    // wie KREISE, aber zwei Umläufe in 4 s
-    p.pitch = p.pitch - grad * 0.5 * (1.0 - std::cos(2.0 * w));
-    p.seit = p.seit + grad * 0.5 * std::sin(2.0 * w);
   } else if (art == OBERARM_SENKRECHT) {
     // nur um die Senkrechte (Arm hängt!): ganzer Arm schwenkt (yaw) und Oberarm dreht sich in der Schulter (twist)
     p.yaw = p.yaw + grad * std::sin(w);
@@ -418,7 +414,7 @@ inline Bewegung mitEinmessenOberarm(const Pose &start, double amplitude, int zyk
   };
 }
 
-// Normalfall (AK-6): Einmessen im Hängen, 'zyklen' (normal 2) Mal beugen und dabei kleine Kreise
+// Normalfall (AK-6): Einmessen im Hängen, 'zyklen' (normal 2) Mal beugen und dabei einen kleinen Kreis
 // des Oberarms (20 Grad, mindestens 15 Grad verlangt die Anforderung).
 inline Bewegung mitEinmessen(const Pose &start, double amplitude, int zyklen,
                              double pronRate, double yawRate, const Danach &danach) {

@@ -1,7 +1,7 @@
 // test_REQ-002.cpp
 // Tests zu REQ-002 (Winkelmessung unabhängig von Drehung): AK-1 bis AK-9, AK-13, AK-14 und Fuzz.
 // Stand Runde 3 (Team-Entscheidung): Einmess-Bewegung = genau 2 Mal beugen (je mindestens 30 Grad Spannweite) und dabei der
-// Oberarm in kleinen Kreisen (20 Grad, verlangt sind mindestens 15), eingemessen wird im Hängen mit lockerem Arm (siehe
+// Oberarm in einem kleinen Kreis (20 Grad, verlangt sind mindestens 15), eingemessen wird im Hängen mit lockerem Arm (siehe
 // mitEinmessen in sim_ellbogen.h). AK-1 bis AK-4 gelten NACH dem Einmessen in jeder Armlage (hängend, vorn, oben, seitlich),
 // gemessen mit Sensor-Rauschen. Am Ende von main steht die Reserve (grösster Fehler gegenüber der Grenze von 2 Grad).
 // Die Tests zu AK-7d (Abbruch 'Oberarm') und 'darf klappen oder Oberarm' stehen in test_REQ-002_oberarm.cpp.
@@ -89,7 +89,7 @@ double g_groessterFehlerAK4Lagen = 0.0;    // grösster Fehler zum echten Winkel
 double g_groessterFehlerAK4Einbau = 0.0;   // grösster Fehler zum echten Winkel in AK-4, Einbaudrehung (Grenze 2,5 Grad)
 
 // art: 0 = Unterarm drehen, 1 = Oberarm in der Schulter drehen, 2 = ganzer Arm schwenkt waagrecht.
-// Ablauf: Einmessen im Hängen (2 Mal beugen + Oberarm-Kreise), dann Ellbogen weich auf flexZiel und der Arm
+// Ablauf: Einmessen im Hängen (2 Mal beugen + 1 Oberarm-Kreis), dann Ellbogen weich auf flexZiel und der Arm
 // weich in die Lage (zusammen 2 s), 0,5 s einschwingen, 1 s Grundwert messen, dann 8 s drehen.
 // Mit Sensor-Rauschen (Gyro 0,1 Grad/s, 0,01 g).
 void drehungPruefen(int art, double flexZiel, const Lage &lageRef, const char *kopf) {

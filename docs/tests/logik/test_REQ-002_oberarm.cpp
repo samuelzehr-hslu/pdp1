@@ -1,10 +1,10 @@
 // test_REQ-002_oberarm.cpp
 // Tests zu REQ-002, AK-7d (Abbruch, wenn die Scharnier-Achse nicht eindeutig bestimmbar ist: "Oberarm")
-// und AK-6 (Einmessen: genau 2 Mal beugen + Oberarm in kleinen Kreisen, dann Hand drehen = Phase 3). Stand: "Achse messen statt annehmen".
+// und AK-6 (Einmessen: genau 2 Mal beugen + Oberarm in einem kleinen Kreis, dann Hand drehen = Phase 3). Stand: "Achse messen statt annehmen".
 //
 // Grundsatz der Anforderung: entweder ist die Achse richtig, oder das Einmessen bricht ab, das Gerät rät nie.
 //   - Oberarm bewegt sich in Phase 2 höchstens 3 Grad (oder nur um die Senkrechte): Einmessen muss abbrechen.
-//   - Oberarm macht kleine Kreise von mindestens 15 Grad und der Unterarm beugt genau 2 Mal >= 30 Grad (Bedienung nach AK-6):
+//   - Oberarm macht einen kleinen Kreis von mindestens 15 Grad und der Unterarm beugt genau 2 Mal >= 30 Grad (Bedienung nach AK-6):
 //     Einmessen muss klappen, danach müssen AK-1 bis AK-4 gelten (Winkel stimmt auf 2 Grad, auch bei gleichzeitigen Bewegungen).
 //   - Reines Pendeln um EINE Achse und nur 1 Mal Beugen gehören nicht mehr zur Bedienung: Das Einmessen DARF klappen
 //     oder mit 'Oberarm' abbrechen. Klappt es, muss der Winkel danach auf 2 Grad stimmen. Bricht es ab, muss die alte
@@ -285,7 +285,7 @@ void wiederholungNachAbbruch() {
       Pose p = poseHaengend();
       p.twist = tw;
       // 0-7,5 s erstes Einmessen (Oberarm hängt still, Hand dreht: Abbruch nur wegen d), 7,5-9,5 s warten,
-      // 9,5-17 s zweites Einmessen mit Oberarm-Kreisen und Hand-Drehung, danach alles gleichzeitig
+      // 9,5-17 s zweites Einmessen mit 1 Oberarm-Kreis und Hand-Drehung, danach alles gleichzeitig
       if (einmessenPose(p, t, 0.0, 70.0, 2, OBERARM_NICHTS, 0.0)) return p;
       if (t < 9.5) return p;
       if (einmessenPose(p, t, 9.5, 70.0, 2, OBERARM_KREISE, 20.0)) return p;
@@ -317,15 +317,14 @@ int main() {
   abbruchGruppe("AK-7d: Oberarm bewegt sich nur 3 Grad", OBERARM_PENDELN, 3.0);
   abbruchGruppe("AK-7d: Oberarm nur um die Senkrechte (Schwenken + Schulterdrehung, je 60 Grad)", OBERARM_SENKRECHT, 60.0);
 
-  std::printf("\n-- AK-6: genau 2 Mal beugen + kleine Kreise des Oberarms (mindestens 15 Grad): Einmessen muss klappen\n");
-  klapptGruppe("AK-6: 2 Mal beugen + Oberarm macht kleine Kreise, 15 Grad (Minimum)", OBERARM_KREISE, 15.0);
-  klapptGruppe("AK-6: 2 Mal beugen + Oberarm macht kleine Kreise, 20 Grad", OBERARM_KREISE, 20.0);
-  klapptGruppe("AK-6: 2 Mal beugen + Oberarm macht 2 Umläufe kleiner Kreise, 15 Grad", OBERARM_KREISE2, 15.0);
+  std::printf("\n-- AK-6: genau 2 Mal beugen + ein kleiner Kreis des Oberarms (mindestens 15 Grad): Einmessen muss klappen\n");
+  klapptGruppe("AK-6: 2 Mal beugen + Oberarm macht 1 kleinen Kreis, 15 Grad (Minimum)", OBERARM_KREISE, 15.0);
+  klapptGruppe("AK-6: 2 Mal beugen + Oberarm macht 1 kleinen Kreis, 20 Grad", OBERARM_KREISE, 20.0);
 
   std::printf("\n-- Gehört nicht mehr zur Bedienung (Pendeln um eine Achse, nur 1 Mal beugen): darf klappen oder abbrechen\n");
   toleriertGruppe("Pendeln um eine Achse, 15 Grad, 2 Mal beugen", OBERARM_PENDELN, 15.0, 2);
   toleriertGruppe("Pendeln um eine Achse, 30 Grad, 2 Mal beugen", OBERARM_PENDELN, 30.0, 2);
-  toleriertGruppe("nur 1 Mal beugen, Oberarm macht kleine Kreise, 20 Grad", OBERARM_KREISE, 20.0, 1);
+  toleriertGruppe("nur 1 Mal beugen, Oberarm macht 1 kleinen Kreis, 20 Grad", OBERARM_KREISE, 20.0, 1);
   toleriertGruppe("nur 1 Mal beugen, Oberarm pendelt 20 Grad", OBERARM_PENDELN, 20.0, 1);
 
   std::printf("\n-- AK-7d: Wiederholung nach Abbruch\n");

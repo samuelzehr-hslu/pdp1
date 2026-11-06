@@ -70,8 +70,8 @@ struct FehlerMusterZustand {
 //   Einmessen: Phase 1 (still) misst Referenz und Gyro-Fehler. In Phase 2 (beugen und
 //   Oberarm mitbewegen) sucht das Gerät die Scharnier-Achse in beiden IMUs.
 //   Ist die Achse nicht eindeutig, bricht es ab ("Oberarm"), es rät nie.
-//   Annahme beim Einmessen: Der Arm hängt entspannt (Knochen senkrecht).
-//   Dann zeigt die Schwerkraft entlang der Knochenachse.
+//   Phase 3 (Hand drehen): Die Drehung des Unterarms um seine Knochenachse wird gemessen.
+//   So weiss das Gerät die Knochenachse, ohne anzunehmen, dass der Arm senkrecht hängt.
 
 // Gründe, warum ein Einmessen abgebrochen wurde (für die Meldung im Seriellen Monitor).
 #define EINMESSEN_GRUND_KEINER  0   // kein Abbruch

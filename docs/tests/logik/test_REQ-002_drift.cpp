@@ -16,7 +16,7 @@
 double g_groessterFehlerMitRuhe = 0.0;     // AK-10
 double g_groessterFehlerOhneRuhe = 0.0;    // AK-11
 
-// 10 Minuten normale Bewegung nach dem Einmessen (Einmessen im Hängen: 2 Mal beugen + Oberarm-Kreise, dann Hand drehen). mitPausen: alle 30 s eine Ruhepause von genau 1 s.
+// 10 Minuten normale Bewegung nach dem Einmessen (Einmessen im Hängen: 2 Mal beugen + 1 Oberarm-Kreis, dann Hand drehen). mitPausen: alle 30 s eine Ruhepause von genau 1 s.
 void driftLauf(bool mitPausen, int fehlerMuster, const char *kopf) {
   Danach danach = [=](double s, const Pose &ende) -> Pose {
     double tau = mitPausen ? ruheZeit(s) : s;
