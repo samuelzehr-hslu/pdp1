@@ -31,9 +31,9 @@ Deutsch, extrem simpel. **Nie hochladen, nie den seriellen Port belegen, nie com
 
 ## Bei Status `pausiert`
 
-Die Anforderung ist nach 3 Runden hängen geblieben. **Frag den User**, was er möchte:
-- Anforderung anpassen (zurück zu `Entwurf`, Runden auf `0`)
-- Nochmals 3 Runden versuchen (Runden auf `0`, weiter mit Developer)
+Die Anforderung ist nach 3 Runden oder 3 Test-Korrekturen hängen geblieben. **Frag den User**, was er möchte:
+- Anforderung anpassen (zurück zu `Entwurf`, Runden und Test-Korrekturen auf `0`)
+- Nochmals versuchen (den erreichten Zähler auf `0`, weiter mit Developer oder Tester)
 - Abbrechen (Status bleibt `pausiert`, Grund in die Datei schreiben)
 
 Danach läuft die Pipeline wieder automatisch weiter, so wie in `.claude/agents/engineer.md` beschrieben.

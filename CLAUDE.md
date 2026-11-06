@@ -20,8 +20,8 @@ Jede Änderung an der Firmware (`jointsense/`) läuft über drei Agenten. Das gi
 
 | Agent | Datei | Aufgabe |
 |---|---|---|
-| **Engineer** | `.claude/agents/engineer.md` | Startet automatisch als Haupt-Chat (`"agent": "engineer"` in `.claude/settings.json`). Klärt Anforderungen mit dem Team, macht den Hardware-Check, legt die Schnittstelle fest und steuert Developer und Tester. Schreibt selbst keinen Code. |
-| **Developer** | `.claude/agents/developer.md` | Programmiert **nur aus der Anforderung**. Sieht die Testfälle nicht (ein Hook sperrt `docs/tests/` und `docs/testberichte/`). Verantwortlich für `docs/tech-stack.md`, arbeitet gegen `docs/bedrohungen.md`. |
+| **Engineer** | `.claude/agents/engineer.md` | Startet automatisch als Haupt-Chat (`"agent": "engineer"` in `.claude/settings.json`). Höchste Stelle unter den Agenten, über ihm steht nur das Team. Klärt Anforderungen mit dem Team, macht den Hardware-Check, legt die Schnittstelle fest und steuert Developer und Tester. Schreibt selbst keinen Code. |
+| **Developer** | `.claude/agents/developer.md` | Programmiert **nur aus der Anforderung** und macht sonst nichts: keine Tests, keine Simulatoren. Sieht die Testfälle nicht (ein Hook sperrt `docs/tests/`, `docs/wokwi/` und `docs/testberichte/`). Verantwortlich für `docs/tech-stack.md`, arbeitet gegen `docs/bedrohungen.md`. |
 | **Tester** | `.claude/agents/tester.md` | Schreibt die Testfälle **vor** dem Programmieren, nur aus der Anforderung. Testet danach: Kompilieren, `cppcheck`, Logik- und Fuzz-Tests (`g++`), Python-Szenarien, Wokwi. Ändert keinen Produkt-Code. |
 
 ### Ablauf (Pipeline)
@@ -32,9 +32,10 @@ Jede Änderung an der Firmware (`jointsense/`) läuft über drei Agenten. Das gi
 4. **Programmieren** (Developer, ohne Testkenntnis) → Status `umgesetzt`.
 5. **Testen** (Tester) → Testbericht in `docs/testberichte/` → Status `getestet`.
 6. **Auswerten** (Engineer): Alles bestanden → Team nimmt ab → Status `abgenommen`. Fehler → Engineer beschreibt sie dem Developer **in Worten** (ohne Testcode) → zurück zu 4.
-   Höchstens **3 Runden**, danach Status `pausiert` und das Team entscheidet (weiter mit `/weiter REQ-xxx`).
+   Höchstens **3 Runden**, danach Status `pausiert` und das Team entscheidet (weiter mit `/weiter REQ-xxx`). Eine Runde ist ein Programmier-Durchgang. Test-Korrekturen sind ebenfalls auf **3** begrenzt, danach bespricht der Engineer es mit dem Team.
 
 Schritte 3 bis 6 laufen automatisch. Das Team ist nur bei 1, bei Rückfragen und bei der Abnahme gefragt.
+Das ist nur die Übersicht. Die genauen Regeln stehen in `.claude/agents/engineer.md` (Ablauf) und `.claude/agents/tester.md` (Prüfkette).
 
 ### Skills
 
@@ -42,13 +43,14 @@ Schritte 3 bis 6 laufen automatisch. Das Team ist nur bei 1, bei Rückfragen und
 |---|---|
 | `/anforderung` | Startknopf: neue Anforderung klären, danach läuft die Pipeline bis zur Abnahme |
 | `/weiter REQ-xxx` | Pausierte Anforderung fortsetzen |
+| `/setup-aenderung` | Kleine Änderung ohne ganze Pipeline (Pin, Einstellwert, Werkzeug, Agenten-Regel): der Engineer passt alle Stellen im Repo an |
 | `/testen` | Aktuellen Code ausserhalb der Pipeline testen (z. B. nach Änderungen von Hand) |
 | `/status` | Übersicht: welche Anforderung steht wo |
 | `/einrichten` | Erkennt System und Prozessor, prüft `arduino-cli`, C++-Compiler, `cppcheck`, Python, `wokwi-cli` und die Sicherheits-Sperren |
 
 ### Regeln
 
-- Kein Code in `jointsense/` ohne Anforderung mit Status `fixiert` oder später. Kleine Tippfehler in Kommentaren sind ausgenommen.
+- Kein Code in `jointsense/` ohne Anforderung mit Status `fixiert` oder später. Ausgenommen sind kleine Tippfehler in Kommentaren und Änderungen über `/setup-aenderung`.
 - Der Developer ändert **nie** Tests. Hält er einen Test oder eine Anforderung für falsch, meldet er das dem Engineer.
 - Status-Werte: `Entwurf → fixiert → tests-geschrieben → umgesetzt → getestet → abgenommen`, dazu `pausiert`.
 - Hochladen aufs Board und der Serielle Monitor sind in `.claude/settings.json` **gesperrt**. Hochladen macht ein Mensch selbst (Arduino IDE oder `arduino-cli upload`).
@@ -93,6 +95,7 @@ Dokumentation und Tests liegen in `docs/`:
 | `docs/wokwi/` | `wokwi.toml` und Anleitung für `wokwi-cli` |
 | `docs/tech-stack.md` | Werkzeuge und Bibliotheken mit fester Version |
 | `docs/bedrohungen.md` | Bedrohungsliste (Cybersecurity und Ausfälle) |
+| `docs/offene-hinweise.md` | Hinweise aus Testberichten, die noch niemand erledigt hat |
 
 ## Kompilieren und Hochladen
 
