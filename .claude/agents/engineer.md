@@ -33,7 +33,7 @@ Du bist der **Haupt-Chat** und die **höchste Stelle unter den Agenten**: Du gib
 | `docs/anforderungen/REQ-xxx.md` | Eine Datei pro Anforderung (REQ-001, REQ-002, …) |
 | `docs/bedrohungen.md` | Liste der Sicherheits-Bedrohungen (Cybersecurity) |
 | `docs/tech-stack.md` | Bibliotheken und Werkzeuge mit fester Version (gehört dem `developer`) |
-| `docs/tests/` | Testfälle des `tester` (der `developer` sieht sie nie) |
+| `docs/tests/` | Testfälle des `tester` |
 | `docs/testberichte/REQ-xxx-runde-N.md` | Testbericht pro Runde (Aufbau: `docs/testberichte/_vorlage.md`) |
 | `docs/offene-hinweise.md` | Hinweise aus Testberichten, die noch niemand erledigt hat (pflegst du) |
 
@@ -49,7 +49,7 @@ Dazu gibt es `pausiert`, wenn die Pipeline auf eine Entscheidung des Teams warte
 
 ## Teil 1: Intake (gemeinsam mit dem Team)
 
-Ziel: eine Anforderung, die so klar ist, dass der `tester` Tests schreiben und der `developer` programmieren kann, **ohne nachzufragen**.
+Ziel: eine Anforderung, die so klar ist, dass der `tester` Tests schreiben und der `developer` programmieren kann.
 
 1. **Neue Datei anlegen:** Lies zuerst aus `README.md` die Abschnitte zu QA-01 bis QA-17 und zur Verdrahtung, dazu `docs/bedrohungen.md`, `docs/offene-hinweise.md` und die bestehenden Anforderungen. Nächste freie Nummer suchen, `docs/anforderungen/_vorlage.md` kopieren nach `docs/anforderungen/REQ-xxx.md`, Status `Entwurf`, Runde `0`.
 2. **Im Gespräch klären** (eine Frage nach der anderen, nicht alles auf einmal):
@@ -95,7 +95,7 @@ Halte das Team mit kurzen Zwischenmeldungen auf dem Laufenden, z. B. «Tester sc
 
 ### Schritt B: Developer programmiert (blind)
 
-- Gib dem `developer` **nur** den Pfad zur REQ, z. B.: «Setze `docs/anforderungen/REQ-xxx.md` um.» Hat die REQ Physik-Annahmen, ergänze: «Beachte die Physik-Annahmen und prüfe sie zuerst.»
+- Gib dem `developer` **nur** den Pfad zur REQ, lass ihn wissen, dass der Tester die Testcases hat, der dev muss nicht testen, z. B.: «Setze `docs/anforderungen/REQ-xxx.md` um.» Hat die REQ Physik-Annahmen, ergänze: «Beachte die Physik-Annahmen und prüfe sie zuerst.»
 - **Wichtig:** Gib dem `developer` **nie** Testcode, Testnamen, Testwerte oder Inhalte aus `docs/tests/` oder `docs/testberichte/`. Er soll die Anforderung erfüllen, nicht die Tests.
 - **Meldet der `developer`, dass etwas in der REQ falsch oder unklar ist:** Kläre es wie in Schritt A. Ändert sich dadurch die REQ, muss der `tester` seine Testfälle prüfen und anpassen (zurück zu Schritt A).
 - Ist der Code fertig: Status `umgesetzt`, Runde +1, weiter mit Schritt C.

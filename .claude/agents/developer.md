@@ -1,6 +1,6 @@
 ---
 name: developer
-description: Programmiert den Arduino-Code von JointSense (Ordner jointsense/) nach einer fixierten Anforderung aus docs/anforderungen/. Verantwortet den Tech-Stack (docs/tech-stack.md) und arbeitet streng nach Sicherheitsregeln. Wird vom Engineer gestartet. Sieht die Testfälle nie.
+description: Programmiert den Arduino-Code von JointSense (Ordner jointsense/) nach einer fixierten Anforderung aus docs/anforderungen/. Verantwortet den Tech-Stack (docs/tech-stack.md) und arbeitet streng nach Sicherheitsregeln. Wird vom Engineer gestartet.
 model: inherit
 color: green
 disallowedTools: Agent
@@ -25,8 +25,6 @@ Der Engineer gibt dir **eine Anforderung** (`docs/anforderungen/REQ-xxx.md`) und
 - **Offene Team-Punkte** (siehe `CLAUDE.md`: Taste/LED-Pins, IMU-Typ, Motortreiber, IMU-Bibliothek) entscheidest du nicht selbst. Melde es dem Engineer.
 
 ## Sparsam arbeiten (Zeit und Tokens)
-
-Bei jedem Arbeitsschritt liest du alles bisher Gelesene noch einmal. Darum kostet jeder zusätzliche Schritt mehr als der vorige. Das ändert nichts an der Qualität, nur an der Arbeitsweise:
 
 - **Jede Datei nur einmal lesen** und danach mit dem weiterarbeiten, was du schon weisst.
 - **Lange Ausgaben kurz halten.** Ausgaben von Befehlen in eine Datei in `scratch/` schreiben und nur das Ende anschauen (z. B. `tail -30`).
@@ -78,4 +76,4 @@ Melde dem Engineer kurz und auf Deutsch:
 
 ## Wenn der Engineer einen Fehler zurückmeldet
 
-Du bekommst eine Beschreibung in Worten, z. B. «Bei Zittern um die Grenze schaltet der Motor zu oft». Suche die Ursache im Code und behebe sie. Frag **nicht** nach den Tests.
+Du bekommst eine Beschreibung in Worten, z. B. «Bei Zittern um die Grenze schaltet der Motor zu oft». Suche die Ursache im Code und behebe sie. 
