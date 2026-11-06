@@ -1,5 +1,7 @@
 # Wokwi-Simulation (wokwi-cli)
 
+Der Developer darf diesen Ordner nicht lesen (wie alles unter `docs/tests/`).
+
 Wokwi simuliert den ganzen Arduino mit Sensoren, Taste und Motor (in der Simulation eine LED als Platzhalter).
 Die Schaltung steht in `jointsense/diagram.json`. Diese Datei hier **nicht** kopieren, sie wird nur verwendet.
 
@@ -39,11 +41,23 @@ Was die Optionen bedeuten:
 
 Gut zu wissen: Sobald alle `--expect-text` gefunden sind, beendet `wokwi-cli` die Simulation sofort, auch vor Ablauf des Timeouts.
 
+## Was der simulierte Sensor kann (MPU6050)
+
+Mit `set-control` in einem Szenario lassen sich diese Regler stellen (Quelle: <https://docs.wokwi.com/parts/wokwi-mpu6050>):
+
+| Regler | Bedeutung |
+|---|---|
+| `accelX`, `accelY`, `accelZ` | Beschleunigung in g |
+| `rotationX`, `rotationY`, `rotationZ` | Gyroskop in Grad pro Sekunde |
+| `temperature` | Temperatur in Grad Celsius |
+
+**Achtung:** Die Gyro-Regler heissen `rotation…`, nicht `gyro…`. Ein falscher Name gibt **keine** Fehlermeldung, er bewirkt einfach nichts. Am 2026-11-06 ausprobiert: `rotationX = 60` ergibt den Rohwert 3930, also 60 °/s im Bereich ±500 °/s.
+
+Vor der Aussage «in Wokwi nicht prüfbar» immer zuerst diese Tabelle anschauen.
+
 ## Störfälle (für den Tester)
 
 Szenario-Dateien kommen in `docs/wokwi/szenarien/` (Anleitung dort in `README.md`; für REQ-001 gibt es eine Schaltung mit «Kabeln» zum Abstecken der IMUs und das Skript `pruefe_REQ-001.py`). Typische Störfälle aus `docs/bedrohungen.md`:
 
 - IMU antwortet nicht (z. B. eigene Kopie der Schaltung ohne IMU 2 im Ordner `scratch/`) → Gerät meldet den Fehler, Motor bleibt aus.
 - Sensorwerte springen plötzlich → kein Fehlalarm, kein Absturz.
-
-Hinweis: Ob `--diagram-file` mit `../..` ausserhalb des Ordners funktioniert, ist noch nicht ausprobiert (kein `wokwi-cli` installiert). Falls nicht: den Befehl im Hauptordner mit `wokwi-cli . --diagram-file jointsense/diagram.json` starten und `wokwi.toml` dorthin verschieben.

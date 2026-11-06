@@ -1,6 +1,6 @@
 # developer_blind.py
 # Dieser Hook sorgt dafür, dass der Developer-Agent "blind" bleibt:
-# Er darf die Testfälle und Testberichte NICHT sehen und NICHT ändern.
+# Er darf die Testfälle, Wokwi-Szenarien und Testberichte NICHT sehen und NICHT ändern.
 #
 # So funktioniert es:
 #   Claude Code ruft dieses Skript vor jedem Werkzeug-Aufruf auf (Lesen, Suchen, Schreiben, Befehle).
@@ -17,7 +17,7 @@ import json
 import sys
 
 # Diese Ordner sind für den Developer gesperrt
-GESPERRTE_ORDNER = ["docs/tests", "docs/testberichte"]
+GESPERRTE_ORDNER = ["docs/tests", "docs/testberichte", "docs/wokwi"]
 
 
 def ist_gesperrt(text):
@@ -74,7 +74,7 @@ def main():
     for text in zu_pruefen:
         if text and ist_gesperrt(text):
             print(
-                "Gesperrt: Der Developer arbeitet blind und darf docs/tests/ und "
+                "Gesperrt: Der Developer arbeitet blind und darf docs/tests/, docs/wokwi/ und "
                 "docs/testberichte/ nicht lesen oder ändern. Programmiere nur nach der "
                 "Anforderung (REQ-xxx.md). Hältst du etwas für unklar, melde es dem Engineer.",
                 file=sys.stderr,
