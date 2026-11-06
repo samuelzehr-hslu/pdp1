@@ -14,6 +14,7 @@ Status-Ablauf:
 | **ID** | REQ-xxx |
 | **Status** | Entwurf |
 | **Runde** | 0 von 3 |
+| **Test-Korrekturen** | 0 von 3 |
 | **Bezug** | QA-xx (siehe README, «Zentrale quantitative Anforderungen») |
 | **Erstellt von** | Name |
 | **Datum** | JJJJ-MM-TT |
@@ -40,6 +41,17 @@ Developer und Tester halten sich beide genau an diese Namen.
 
 Datei: `jointsense/logik.h` (reine Logik, ohne Arduino-Befehle)
 
+## Physik-Annahmen
+
+Nur wenn es um Bewegung oder Sensorwerte geht, sonst «nicht betroffen». Der Developer programmiert danach, der Tester baut seinen Simulator **nur** daraus, darum mit Zahlen:
+
+- **Achsen und Vorzeichen:** Was ist 0°, was ist positiv?
+- **Einbau der IMUs:** Wie dürfen sie sitzen und verdreht sein?
+- **Bewegungen:** Welche, wie schnell und welche **gleichzeitig**?
+- **Sensorfehler:** Offset, Rauschen, Beschleunigung durch Bewegung.
+- **Was die Person tun muss:** z. B. beim Einmessen.
+- **Machbarkeit:** Welche Grösse lässt sich aus welchen Sensordaten bestimmen, und was nicht?
+
 ## Hardware-Check
 
 Macht der Engineer, **bevor** die Anforderung fixiert wird.
@@ -51,6 +63,22 @@ Macht der Engineer, **bevor** die Anforderung fixiert wird.
 | Strom: Akkubetrieb ≥ 4 h weiterhin möglich (QA-06) | ☐ ok / ☐ nicht betroffen / ☐ kritisch | |
 | Gewicht: Gesamtmasse ≤ 250 g weiterhin möglich (QA-07) | ☐ ok / ☐ nicht betroffen / ☐ kritisch | |
 | Sensor-Grenzen: Messbereich, Abtastrate, Auflösung reichen (QA-01) | ☐ ok / ☐ nicht betroffen / ☐ kritisch | |
+| Testbarkeit: Jedes Kriterium ist mit Logik-Tests, Wokwi oder am Board prüfbar | ☐ ok / ☐ Teile nur am Board / ☐ nicht prüfbar | Welches Kriterium wird womit geprüft? Ändert es Tests anderer Anforderungen? |
+
+### Neue Bauteile
+
+Nur wenn ein Teil dazukommt oder ersetzt wird, sonst «nicht betroffen». Ohne Datenblatt wird die Anforderung nicht fixiert.
+
+| Prüfpunkt | Ergebnis | Bemerkung |
+|---|---|---|
+| Bauteil: genaues Modell und Datenblatt | ☐ vorhanden / ☐ fehlt | Modell, Link |
+| Spannung passt zu Stromquelle und Logik (3.3 V / 5 V) | ☐ ok / ☐ Problem | Zahlen |
+| Dauer- und Anlaufstrom passen zu Pin und Stromquelle | ☐ ok / ☐ Problem | Rechnung |
+| Treiber oder Schutzteile nötig (z. B. Freilaufdiode) | ☐ nein / ☐ ja | Welche? |
+| I²C: kein Adresskonflikt | ☐ ok / ☐ Konflikt / ☐ kein I²C | Adresse |
+| Eignung für die Aufgabe | ☐ ok / ☐ nur per Versuch klärbar | Was zeigt der Versuch? |
+| Rechnung von einem Teammitglied angeschaut | ☐ ja | Name, Datum |
+| Erster Test am echten Board | – | Was ist zu prüfen, wenn das Teil zum ersten Mal angeschlossen wird? |
 
 ## Bedrohungen
 

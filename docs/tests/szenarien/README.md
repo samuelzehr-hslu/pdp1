@@ -15,7 +15,11 @@ python docs/tests/szenarien/winkelverlauf.py      # Mac/Linux: python3 ...
 
 Ergebnis: CSV-Dateien in `scratch/szenarien/` (nicht im Repo) mit den Spalten `zeit_ms, winkel_grad`.
 
+`python docs/tests/alle_tests.py` startet alle Skripte hier automatisch, einzeln starten ist nicht nötig.
+
 ## Enthaltene Szenarien
+
+**Achtung:** Die drei Verläufe in dieser Tabelle liest noch **kein** Test. Die «Erwartung» ist also nicht geprüft (siehe `docs/offene-hinweise.md`). `ausfall_verlaeufe.py` dagegen wird von `test_REQ-001.cpp` benutzt.
 
 | Name | Was passiert | Erwartung (Beispiel) |
 |---|---|---|
