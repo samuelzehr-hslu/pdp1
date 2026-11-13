@@ -7,14 +7,19 @@
 //   1. Zwei IMUs (Oberarm und Unterarm) messen Beschleunigung UND Drehgeschwindigkeit (Gyro).
 //   2. Der Ellbogenwinkel zählt nur die Drehung um die Scharnier-Achse des Ellbogens.
 //      Andere Drehungen (Hand drehen, Schulter drehen, Arm schwenken) ändern ihn nicht.
-//   3. Einmessen (Taste kurz drücken): 2 s Arm still gestreckt (hängend) = Referenz (0 Grad).
-//      Ein Vibrationsstoss meldet "jetzt bewegen": 4 s Arm 2 Mal beugen und strecken
-//      und dabei den Oberarm leicht mitbewegen (ein kleiner Kreis von mindestens 15 Grad), damit das Gerät die
-//      Scharnier-Achse findet. Ist sie nicht eindeutig (z. B. Oberarm still), bricht
-//      das Einmessen ab ("Grund: Oberarm").
-//      Dann zwei kurze Stösse meldet "jetzt Hand drehen": 1,5 s Unterarm einmal hin und
-//      zurück drehen. Daraus misst das Gerät die Knochenachse des Unterarms ("Grund: Hand",
-//      wenn die Hand nicht gedreht wurde). Sonst gibt es die Bestätigungsvibration.
+//   3. Einmessen (REQ-002 und REQ-004). Bestätigen heisst: Taste kurz drücken ODER im Seriellen
+//      Monitor Enter (oder Leertaste) schicken.
+//      Start mit einer Bestätigung. Schritt 1: 2 s Arm still gestreckt (hängend) = Referenz (0 Grad).
+//      Das Gerät prüft sofort, ob der Arm ruhig war, vibriert 300 ms ("fertig, warte") und wartet.
+//      Nach der Bestätigung meldet ein Stoss "jetzt bewegen". Schritt 2: 4 s Arm 2 Mal beugen und
+//      strecken und dabei den Oberarm leicht mitbewegen (ein kleiner Kreis von mindestens 15 Grad),
+//      damit das Gerät die Scharnier-Achse findet. Prüfen ("Grund: Beugung" oder "Grund: Oberarm"),
+//      300 ms Stoss und wieder warten.
+//      Nach der Bestätigung melden zwei kurze Stösse "jetzt Hand drehen". Schritt 3: 1,5 s Unterarm
+//      einmal hin und zurück drehen. Daraus misst das Gerät die Knochenachse des Unterarms
+//      ("Grund: Hand", wenn die Hand nicht gedreht wurde). Sonst gibt es die Bestätigungsvibration.
+//      Kommt beim Warten 30 s lang keine Bestätigung: Abbruch ("Grund: Bestaetigung").
+//      Bestätigungen während einer Mess-Phase werden ignoriert.
 //      Nach dem Einschalten gibt es KEINE automatische Einmessung.
 //   4. Ist der Arm mehr als GRENZWERT_GRAD über der Referenz -> Motor vibriert.
 //   5. Antwortet eine IMU 3 Mal in Folge nicht (REQ-001), gilt sie als ausgefallen:
@@ -44,14 +49,27 @@ const unsigned long REFERENZ_MELDUNG_MS = 1000; // "Keine Referenz" wird alle 10
 const unsigned long ZYKLUS_MELDUNG_MS = 1000;   // "Zyklus max" wird alle 1000 ms gemeldet (AK-15)
 const unsigned long IMU_BEREICH_MS = 1000;      // so oft wird der Messbereich der IMUs neu eingestellt
 
-// Einmessen (README: "Bedienung", AK-6 und AK-7)
-const unsigned long EINMESS_STILL_MS  = 2000;   // Phase 1: Arm still halten (0 bis 2000 ms)
-const unsigned long EINMESS_DREHUNG_MS = 6000;  // Phase 3 (Hand drehen) beginnt; davor Phase 2 (Bewegung, 4000 ms)
-const unsigned long EINMESS_GESAMT_MS = 7500;   // Ende von Phase 3: danach wird ausgewertet
+// Einmessen (README: "Bedienung", REQ-002 AK-6 und AK-7, REQ-004)
+const unsigned long EINMESS_STILL_MS    = 2000; // Phase 1: Arm still halten
+const unsigned long EINMESS_BEWEGUNG_MS = 4000; // Phase 2: beugen (der Stoss am Anfang gehört dazu)
+const unsigned long EINMESS_DREHUNG_MS  = 1500; // Phase 3: Hand drehen (die Stösse gehören dazu)
+                                                // Messzeit zusammen: 7500 ms (QA-02), dazu die Wartezeiten
+const unsigned long EINMESS_WARTEN_MAX_MS = 30000; // so lange wird höchstens auf die Bestätigung gewartet (REQ-004)
 const unsigned long STOSS_BEWEGUNG_MS = 100;    // Vibrationsstoss "jetzt bewegen" (und jeder Stoss von Phase 3)
 const unsigned long STOSS_ABSTAND_MS = 200;     // Phase 3: zweiter Stoss beginnt 200 ms nach dem ersten (100 aus, 100 an)
+const unsigned long STOSS_WARTEN_MS = 300;      // Warte-Stoss "fertig, warte" (REQ-004, AK-8)
 const unsigned long STOSS_BESTAETIGUNG_MS = 150; // Bestätigungsvibration am Ende
 const float EINMESS_MIN_BEUGUNG_GRAD = 30.0;    // so gross muss die Beugung beim Einmessen sein
+const int SERIELL_MAX_ZEICHEN = 64;             // so viele Zeichen werden pro Durchlauf höchstens gelesen
+                                                // (so gross ist der Empfangspuffer des Arduino)
+
+// Die Schritte des Einmessens (Werte für die Variable einmessSchritt)
+const uint8_t SCHRITT_AUS      = 0;   // kein Einmessen
+const uint8_t SCHRITT_STILL    = 1;   // Phase 1: Arm still
+const uint8_t SCHRITT_BEWEGUNG = 2;   // Phase 2: beugen
+const uint8_t SCHRITT_DREHUNG  = 3;   // Phase 3: Hand drehen
+const uint8_t SCHRITT_WARTEN_1 = 4;   // nach Phase 1: wartet auf die Bestätigung
+const uint8_t SCHRITT_WARTEN_2 = 5;   // nach Phase 2: wartet auf die Bestätigung
 
 // Messbereich der IMU (MPU6050), siehe Datenblatt:
 const float ACC_PRO_G   = 16384.0;  // Rohwerte pro g bei +-2 g (Standard)
@@ -76,9 +94,9 @@ unsigned long zyklusMaxUs = 0;       // längste Messzeit seit der letzten Meldu
 unsigned long letzteAktualisierungUs = 0; // Zeitpunkt der letzten Winkel-Aktualisierung (micros)
 bool hatLetzteAktualisierung = false;     // gibt es schon einen letzten Zeitpunkt?
 
-// Einmessen (läuft ohne Warten, Schritt für Schritt in loop())
-uint8_t einmessPhase = 0;            // 0 = aus, 1 = Phase Still, 2 = Phase Bewegung
-unsigned long einmessStartMs = 0;    // Zeitpunkt, an dem die Taste gedrückt wurde
+// Einmessen (blockiert nie, läuft Schritt für Schritt in loop())
+uint8_t einmessSchritt = SCHRITT_AUS; // in welchem Schritt sind wir? (SCHRITT_...)
+unsigned long schrittStartMs = 0;     // Zeitpunkt, an dem der jetzige Schritt begonnen hat
 
 // Vibrationsstoss (z. B. 100 ms oder 150 ms), ohne Warten
 bool stossAktiv = false;             // läuft gerade ein Vibrationsstoss?
@@ -116,6 +134,7 @@ void setup() {
 
   // Kein automatisches Einmessen mehr (AK-9): Einmessen nur per Taste.
   Serial.println(F("Zum Einmessen: Arm strecken und Taste kurz druecken."));
+  Serial.println(F("(oder Enter im Seriellen Monitor)"));
 }
 
 
@@ -132,9 +151,23 @@ void loop() {
     stossStarten(jetzt, STOSS_BEWEGUNG_MS);
   }
 
-  // Taste: kurzer Druck startet das Einmessen (nur wenn nicht schon eines läuft)
-  if (tasteGedrueckt() && einmessPhase == 0) {
-    einmessenBeginnen(jetzt);
+  // Bestätigung (Taste oder Enter/Leertaste): höchstens eine pro Durchlauf (REQ-004, AK-1 und AK-2).
+  // Wird in JEDEM Durchlauf gelesen, damit Zeichen während einer Mess-Phase verworfen werden.
+  if (bestaetigungGekommen(jetzt)) {
+    if (einmessSchritt == SCHRITT_AUS) {
+      einmessenBeginnen(jetzt);               // Start (AK-4)
+    } else if (einmessSchritt == SCHRITT_WARTEN_1) {
+      bewegungBeginnen(jetzt);                // weiter mit Phase 2 (AK-6)
+    } else if (einmessSchritt == SCHRITT_WARTEN_2) {
+      drehungBeginnen(jetzt);                 // weiter mit Phase 3 (AK-7)
+    }
+    // In einer Mess-Phase (1, 2 oder 3): ignorieren und nicht merken (AK-3)
+  }
+
+  // Zu lange gewartet? Dann Abbruch (AK-9). Die Rechnung stimmt auch beim Überlauf von millis().
+  if ((einmessSchritt == SCHRITT_WARTEN_1 || einmessSchritt == SCHRITT_WARTEN_2) &&
+      wartezeitAbgelaufen(schrittStartMs, jetzt, EINMESS_WARTEN_MAX_MS)) {
+    einmessenAbbrechenMelden(EINMESSEN_GRUND_BESTAETIGUNG);
   }
 
   // Nur alle MESS_PAUSE_MS messen, sonst gleich wieder von vorne
@@ -143,22 +176,22 @@ void loop() {
   }
   letzteMessung = jetzt;
 
-  // Einmessen: nach 2000 ms beginnt die Bewegungsphase (Phase 2) mit einem Vibrationsstoss
-  if (einmessPhase == 1 && (jetzt - einmessStartMs) >= EINMESS_STILL_MS) {
-    einmessenBewegungStart(ellbogen);
-    einmessPhase = 2;
-    stossStarten(jetzt, STOSS_BEWEGUNG_MS);
-    Serial.println(F("Jetzt Arm 2 Mal beugen und strecken."));
+  // Einmessen: nach 2000 ms ist Phase 1 fertig. Sofort prüfen, dann warten (AK-5)
+  if (einmessSchritt == SCHRITT_STILL && (jetzt - schrittStartMs) >= EINMESS_STILL_MS) {
+    if (einmessenStillAuswerten(ellbogen)) {
+      wartenBeginnen(jetzt, SCHRITT_WARTEN_1);
+    } else {
+      einmessenBeenden(einmessenGrund(ellbogen));   // Grund: ruhig
+    }
   }
 
-  // Einmessen: nach 6000 ms beginnt Phase 3 (Hand drehen) mit zwei kurzen Stössen
-  if (einmessPhase == 2 && (jetzt - einmessStartMs) >= EINMESS_DREHUNG_MS) {
-    einmessenDrehungStart(ellbogen);
-    einmessPhase = 3;
-    stossStarten(jetzt, STOSS_BEWEGUNG_MS);   // 1. Stoss: 100 ms an
-    zweiterStossOffen = true;                 // 2. Stoss: 100 ms aus, dann 100 ms an
-    zweiterStossMs = jetzt + STOSS_ABSTAND_MS;
-    Serial.println(F("Jetzt Hand einmal hin und zurueck drehen."));
+  // Einmessen: nach 4000 ms ist Phase 2 fertig. Sofort prüfen, dann warten (AK-6)
+  if (einmessSchritt == SCHRITT_BEWEGUNG && (jetzt - schrittStartMs) >= EINMESS_BEWEGUNG_MS) {
+    if (einmessenBewegungAuswerten(ellbogen, EINMESS_MIN_BEUGUNG_GRAD)) {
+      wartenBeginnen(jetzt, SCHRITT_WARTEN_2);
+    } else {
+      einmessenBeenden(einmessenGrund(ellbogen));   // Grund: Beugung oder Oberarm
+    }
   }
 
   // Alle 1000 ms den Messbereich der IMUs neu einstellen (falls eine IMU kurz neu gestartet ist)
@@ -194,8 +227,8 @@ void loop() {
   bool aus2 = imuStatusAktualisieren(imu2, ok2, FEHLER_SCHWELLE);
   bool ausfall = aus1 || aus2;
 
-  // Fällt eine Messung aus, während eingemessen wird: Einmessen abbrechen (AK-7 c)
-  if (einmessPhase != 0 && (!ok1 || !ok2)) {
+  // Fällt eine Messung aus, während eingemessen wird (auch beim Warten): abbrechen (REQ-002 AK-7 c, REQ-004 AK-12)
+  if (einmessSchritt != SCHRITT_AUS && (!ok1 || !ok2)) {
     einmessenAbbrechenMelden(EINMESSEN_GRUND_IMU);
   }
 
@@ -212,7 +245,7 @@ void loop() {
         float dt = (float)(jetztUs - letzteAktualisierungUs) * 0.000001f;
         winkelAktualisiert = ellbogenAktualisieren(ellbogen, messung1, messung2, dt);
         zyklusVerwendet = true;
-        if (!winkelAktualisiert && einmessPhase != 0) {
+        if (!winkelAktualisiert && einmessSchritt != SCHRITT_AUS) {
           // Ungültige Werte oder zu lange Pause: Einmessen wäre falsch, also abbrechen (AK-7 c)
           einmessenAbbrechenMelden(EINMESSEN_GRUND_IMU);
         }
@@ -257,14 +290,14 @@ void loop() {
       letzteFehlerMeldung = jetzt;
       fehlerMelden();
     }
-  } else if (einmessPhase != 0) {
-    // Während dem Einmessen gibt es keine Überstreckungs-Warnung. Der Motor vibriert nur
-    // bei den Stössen (Zeichen "jetzt bewegen" und Bestätigung).
+  } else if (einmessSchritt != SCHRITT_AUS) {
+    // Während dem ganzen Einmessen (Phasen UND Warte-Zustände) gibt es keine Überstreckungs-Warnung
+    // (REQ-004, AK-10). Der Motor vibriert nur bei den Stössen und der Bestätigung.
     grenzZustand.warnungAktiv = false;
     grenzZustand.zuWeitSeit = 0;
-    // Nach 7500 ms (Ende von Phase 3) ist das Einmessen fertig
-    if (zyklusVerwendet && winkelAktualisiert && einmessPhase == 3 &&
-        (jetzt - einmessStartMs) >= EINMESS_GESAMT_MS) {
+    // Nach 1500 ms Phase 3 ist das Einmessen fertig (AK-7)
+    if (zyklusVerwendet && winkelAktualisiert && einmessSchritt == SCHRITT_DREHUNG &&
+        (jetzt - schrittStartMs) >= EINMESS_DREHUNG_MS) {
       einmessenFertig(jetzt);
     }
   } else if (ok1 && ok2) {
@@ -401,8 +434,8 @@ int16_t bytesZuZahl() {
 
 // Startet das Einmessen: Phase 1 (Still, 2000 ms).
 void einmessenBeginnen(unsigned long jetzt) {
-  einmessPhase = 1;
-  einmessStartMs = jetzt;
+  einmessSchritt = SCHRITT_STILL;
+  schrittStartMs = jetzt;
   einmessenStart(ellbogen);
   grenzZustand.warnungAktiv = false;
   grenzZustand.zuWeitSeit = 0;
@@ -410,10 +443,45 @@ void einmessenBeginnen(unsigned long jetzt) {
   Serial.println(F("Einmessen... Arm ruhig gestreckt halten."));
 }
 
-// Schliesst das Einmessen nach 7500 ms ab: Bestätigung oder Abbruch-Meldung.
+// Beginnt einen Warte-Zustand (SCHRITT_WARTEN_1 oder SCHRITT_WARTEN_2):
+// 300 ms Warte-Stoss und GENAU EINE Zeile, die den nächsten Schritt nennt (REQ-004, AK-8).
+void wartenBeginnen(unsigned long jetzt, uint8_t schritt) {
+  einmessSchritt = schritt;
+  schrittStartMs = jetzt;                 // ab jetzt zählt die Wartezeit (höchstens 30 s)
+  zweiterStossOffen = false;
+  stossStarten(jetzt, STOSS_WARTEN_MS);
+  if (schritt == SCHRITT_WARTEN_1) {
+    Serial.println(F("Schritt 1 fertig. Enter oder Taste fuer Schritt 2 (Bewegung)."));
+  } else {
+    Serial.println(F("Schritt 2 fertig. Enter oder Taste fuer Schritt 3 (Hand drehen)."));
+  }
+}
+
+// Beginnt Phase 2 (Bewegung, 4000 ms) mit einem Vibrationsstoss (nach der Bestätigung im Warte-Zustand 1).
+// Der neue Stoss ersetzt einen noch laufenden Warte-Stoss sofort.
+void bewegungBeginnen(unsigned long jetzt) {
+  einmessenBewegungStart(ellbogen);
+  einmessSchritt = SCHRITT_BEWEGUNG;
+  schrittStartMs = jetzt;
+  stossStarten(jetzt, STOSS_BEWEGUNG_MS);
+  Serial.println(F("Jetzt Arm 2 Mal beugen und strecken."));
+}
+
+// Beginnt Phase 3 (Hand drehen, 1500 ms) mit zwei kurzen Stössen (nach der Bestätigung im Warte-Zustand 2).
+void drehungBeginnen(unsigned long jetzt) {
+  einmessenDrehungStart(ellbogen);
+  einmessSchritt = SCHRITT_DREHUNG;
+  schrittStartMs = jetzt;
+  stossStarten(jetzt, STOSS_BEWEGUNG_MS);   // 1. Stoss: 100 ms an
+  zweiterStossOffen = true;                 // 2. Stoss: 100 ms aus, dann 100 ms an
+  zweiterStossMs = jetzt + STOSS_ABSTAND_MS;
+  Serial.println(F("Jetzt Hand einmal hin und zurueck drehen."));
+}
+
+// Schliesst das Einmessen am Ende von Phase 3 ab: Bestätigung oder Abbruch-Meldung.
 void einmessenFertig(unsigned long jetzt) {
   bool ok = einmessenAbschliessen(ellbogen, EINMESS_MIN_BEUGUNG_GRAD);
-  einmessPhase = 0;
+  einmessSchritt = SCHRITT_AUS;
   grenzZustand.warnungAktiv = false;
   grenzZustand.zuWeitSeit = 0;
   if (ok) {
@@ -425,13 +493,21 @@ void einmessenFertig(unsigned long jetzt) {
   }
 }
 
-// Bricht das Einmessen ab (z. B. IMU ausgefallen) und schreibt den Grund.
-// Die bisherige Referenz und Achse bleiben, es gibt keine Bestätigungsvibration (AK-7).
+// Bricht das Einmessen von aussen ab (IMU ausgefallen oder Wartezeit vorbei) und schreibt den Grund.
+// Die bisherige Referenz und Achse bleiben, es gibt keine Bestätigungsvibration (REQ-004, AK-11).
 void einmessenAbbrechenMelden(uint8_t grund) {
-  einmessenAbbrechen(ellbogen);
-  einmessPhase = 0;
-  stossAktiv = false;
+  einmessenAbbrechen(ellbogen);           // Logik beenden (Referenz und Achse bleiben)
+  einmessenBeenden(grund);
+}
+
+// Beendet das Einmessen nach einem Abbruch: Motor aus, Stösse weg, Meldung schreiben.
+// Danach ist das Gerät sofort wieder bereit für einen neuen Start.
+void einmessenBeenden(uint8_t grund) {
+  einmessSchritt = SCHRITT_AUS;
+  stossAktiv = false;                     // ein laufender Stoss (z. B. Warte-Stoss) endet sofort
   zweiterStossOffen = false;              // ein geplanter zweiter Stoss entfällt
+  grenzZustand.warnungAktiv = false;
+  grenzZustand.zuWeitSeit = 0;
   feedbackAusgeben(false);
   einmessenAbbruchMelden(grund);
 }
@@ -447,6 +523,8 @@ void einmessenAbbruchMelden(uint8_t grund) {
     Serial.println(F("Oberarm"));
   } else if (grund == EINMESSEN_GRUND_HAND) {
     Serial.println(F("Hand"));
+  } else if (grund == EINMESSEN_GRUND_BESTAETIGUNG) {
+    Serial.println(F("Bestaetigung"));
   } else {
     Serial.println(F("IMU"));
   }
@@ -510,9 +588,31 @@ void fehlerMelden() {
   Serial.println(F("ausgefallen"));
 }
 
-// Gibt true zurück, wenn die Taste gerade eben gedrückt wurde (nur einmal pro Druck).
-// Die Entprell-Logik steht in logik.cpp (tasteNeuGedrueckt).
-bool tasteGedrueckt() {
+// Gibt true zurück, wenn eine Bestätigung gekommen ist (REQ-004, AK-1 und AK-2):
+//   (a) die Taste wurde gerade eben neu gedrückt (entprellt in logik.cpp, tasteNeuGedrueckt), oder
+//   (b) vom Seriellen Monitor kam ein Leerzeichen, '\n' oder '\r' (istBestaetigungsZeichen).
+// Alle Zeichen, die gerade im Empfangspuffer liegen, werden gelesen und verworfen, auch die
+// anderen. So zählt ein Durchlauf höchstens EINE Bestätigung (z. B. " \r\n" nur einmal).
+// Es wird nie auf Zeichen gewartet und kein Text gespeichert (B-1, AK-15).
+bool bestaetigungGekommen(unsigned long jetzt) {
+  bool zeichenKam = false;
+  int anzahl = Serial.available();        // so viele Zeichen liegen JETZT im Puffer
+  if (anzahl > SERIELL_MAX_ZEICHEN) {
+    anzahl = SERIELL_MAX_ZEICHEN;         // Sicherheit: nie mehr lesen als der Puffer fassen kann
+  }
+  for (int i = 0; i < anzahl; i++) {
+    int zeichen = Serial.read();          // -1 heisst: doch kein Zeichen da
+    if (zeichen < 0) {
+      break;
+    }
+    if (istBestaetigungsZeichen((char)zeichen)) {
+      zeichenKam = true;
+    }
+  }
+
+  // Die Taste wird immer gelesen (auch während einer Mess-Phase), damit ein Druck dort verfällt.
   bool istGedrueckt = (digitalRead(PIN_TASTER) == LOW);   // LOW = gedrückt
-  return tasteNeuGedrueckt(tasteZustand, istGedrueckt, millis(), TASTER_PRELL_MS);
+  bool tasterNeu = tasteNeuGedrueckt(tasteZustand, istGedrueckt, jetzt, TASTER_PRELL_MS);
+
+  return tasterNeu || zeichenKam;
 }

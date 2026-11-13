@@ -71,7 +71,7 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 | ID | Anforderung | Zielwert |
 |---|---|---|
 | QA-01 | Messbereich / Abtastrate / Auflösung | −100° (Beugung) bis +15° (Überstreckung) / ≥ 25 Hz / ≤ 1° |
-| QA-02 | Einmessen der Referenz | ≤ 8 s (2 s still, 4 s Beuge-Bewegung, 1,5 s Hand drehen), Wiederholgenauigkeit ± 1,5° |
+| QA-02 | Einmessen der Referenz | Messzeit ≤ 8 s (2 s still, 4 s Beuge-Bewegung, 1,5 s Hand drehen), dazu die Wartezeiten der Person zwischen den Schritten (je höchstens 30 s, REQ-004), Wiederholgenauigkeit ± 1,5° |
 | QA-03 | Grenzwert-Einstellbereich | 0° bis +10°, Schrittweite ≤ 2° |
 | QA-04 | Erkennung Grenzwertüberschreitung | Toleranz ≤ ± 2°, Erkennungsrate ≥ 95 % |
 | QA-05 | Feedback-Latenz | ≤ 100 ms, Zuverlässigkeit ≥ 98 % |

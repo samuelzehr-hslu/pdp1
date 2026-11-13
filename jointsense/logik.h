@@ -72,6 +72,19 @@ struct FehlerMusterZustand {
 //   Ist die Achse nicht eindeutig, bricht es ab ("Oberarm"), es rät nie.
 //   Phase 3 (Hand drehen): Die Drehung des Unterarms um seine Knochenachse wird gemessen.
 //   So weiss das Gerät die Knochenachse, ohne anzunehmen, dass der Arm senkrecht hängt.
+//
+//   Ablauf mit Warten (REQ-004), so ruft jointsense.ino die Funktionen auf:
+//     einmessenStart            -> Phase 1 (Still, 2000 ms)
+//     einmessenStillAuswerten   -> prüft Phase 1, dann Warte-Zustand 1 (bis die Person bestätigt)
+//     einmessenBewegungStart    -> Phase 2 (Bewegung, 4000 ms)
+//     einmessenBewegungAuswerten-> prüft Phase 2, dann Warte-Zustand 2
+//     einmessenDrehungStart     -> Phase 3 (Hand drehen, 1500 ms)
+//     einmessenAbschliessen     -> prüft Phase 3 und setzt Referenz und Achsen
+//   In den Warte-Zuständen ruft das .ino nur ellbogenAktualisieren auf. Die Logik sammelt dort
+//   KEINE Einmess-Daten, sie führt nur die Lage beider IMUs weiter (Gyro, von der Schwerkraft
+//   gestützt). So bleibt die Verbindung Referenz (Phase 1) <-> Achsen (Phase 2 und 3) richtig,
+//   auch wenn die Person bis zu 30 s wartet und den Arm dabei bewegt.
+//   Der alte Ablauf ohne die zwei Auswerte-Funktionen (REQ-002) funktioniert weiterhin gleich.
 
 // Gründe, warum ein Einmessen abgebrochen wurde (für die Meldung im Seriellen Monitor).
 #define EINMESSEN_GRUND_KEINER  0   // kein Abbruch
@@ -80,6 +93,9 @@ struct FehlerMusterZustand {
 #define EINMESSEN_GRUND_IMU     3   // IMU ausgefallen oder ungültige Werte
 #define EINMESSEN_GRUND_OBERARM 4   // Scharnier-Achse nicht eindeutig (z. B. Oberarm still)
 #define EINMESSEN_GRUND_HAND    5   // Knochenachse des Unterarms nicht sicher bestimmt (Hand nicht gedreht)
+#define EINMESSEN_GRUND_BESTAETIGUNG 6  // Wartezeit abgelaufen, keine Bestätigung (REQ-004).
+                                        // Diesen Grund gibt jointsense.ino selbst an die Meldung weiter,
+                                        // einmessenGrund() liefert ihn nie.
 
 // Die Anzahl Zwischenwerte (alle 0,25 s), die beim Einmessen für die Beuge-Prüfung gemerkt werden.
 #define ELLBOGEN_ZWISCHENWERTE 17
@@ -115,8 +131,10 @@ struct EllbogenZustand {
   float drehungLetzte;      // Verdrehung des Unterarms um seine Achse vor dem Ausfall (Grad)
 
   // ----- Einmessen (Sammelfächer, nur während dem Einmessen gebraucht) -----
-  uint8_t phase;            // 0 = kein Einmessen, 1 = Phase Still, 2 = Phase Bewegung
+  uint8_t phase;            // 0 = kein Einmessen, 1 = Still, 2 = Bewegung, 3 = Hand drehen,
+                            // 4 = Warte-Zustand 1, 5 = Warte-Zustand 2 (REQ-004)
   uint8_t grund;            // Abbruchgrund (EINMESSEN_GRUND_...)
+  bool bewegungOk;          // true = Phase 2 wurde schon geprüft und hat bestanden (REQ-004)
   uint8_t zwischenAnzahl;   // Anzahl gespeicherter Zwischenwerte
   bool ratenGueltig2;       // true = die Geschwindigkeiten vom letzten Zyklus von Phase 2 sind da
   uint16_t anzahl1;         // Anzahl Messungen in Phase 1
@@ -128,7 +146,9 @@ struct EllbogenZustand {
   float summeW2[3];
   float summeBetrag1;       // Phase 1: Summe vom Betrag der Drehgeschwindigkeit
   float summeBetrag2;
-  float lage[2][4];         // Phase 2: Drehung von IMU 1 und IMU 2 seit Beginn von Phase 2 (Quaternion)
+  float lage[2][4];         // Drehung von IMU 1 und IMU 2 (Quaternion): im Warte-Zustand 1 seit Phase 1,
+                            // ab Phase 2 seit Beginn von Phase 2
+  float schwer0[2][3];      // Schwerkraft-Richtung von IMU 1 und IMU 2 zu Beginn von Phase 2 (Ausgangslage, Länge 1)
   float rateP[2][3];        // Phase 2: letzte Drehgeschwindigkeit von IMU 1 und IMU 2 (rad/s)
   float matrixM[21];        // Phase 2: Sammelmatrix für die Scharnier-Achsen (6x6, obere Hälfte)
   float dreh[8];            // Phase 3: Richtung, Summe der Drehachse von IMU 2, Weg von IMU 1 und IMU 2 (rad)
@@ -215,15 +235,29 @@ bool ellbogenAktualisieren(EllbogenZustand &z, const ImuMessung &oberarm,
 // Beginnt Phase 1 (Still). Referenz und Achse von vorher bleiben gültig.
 void einmessenStart(EllbogenZustand &z);
 
-// Beginnt Phase 2 (Bewegung), nach 2000 ms Phase 1.
+// Am Ende von Phase 1 (nach 2000 ms) aufrufen (REQ-004).
+// true  = Arm war ruhig, weiter: die Logik ist jetzt im Warte-Zustand 1.
+// false = Abbruch, einmessenGrund(z) gibt EINMESSEN_GRUND_RUHIG (auch wenn es in Phase 1
+//         keinen einzigen gültigen Messzyklus gab). Alte Referenz und Achse bleiben.
+bool einmessenStillAuswerten(EllbogenZustand &z);
+
+// Beginnt Phase 2 (Bewegung): nach der Bestätigung im Warte-Zustand 1 (REQ-004)
+// oder (alter Ablauf, REQ-002) direkt nach 2000 ms Phase 1.
 void einmessenBewegungStart(EllbogenZustand &z);
 
-// Beginnt Phase 3 (Hand drehen), nach 6000 ms. Danach folgt nach 1500 ms einmessenAbschliessen.
+// Am Ende von Phase 2 (nach 4000 ms) aufrufen (REQ-004). Prüft Beugung und Scharnier-Achse.
+// true  = beides ok, die Logik ist jetzt im Warte-Zustand 2.
+// false = Abbruch, Grund EINMESSEN_GRUND_BEUGUNG oder EINMESSEN_GRUND_OBERARM.
+bool einmessenBewegungAuswerten(EllbogenZustand &z, float minBeugungGrad);
+
+// Beginnt Phase 3 (Hand drehen): nach der Bestätigung im Warte-Zustand 2 (REQ-004)
+// oder (alter Ablauf) direkt nach Phase 2. Nach 1500 ms folgt einmessenAbschliessen.
 void einmessenDrehungStart(EllbogenZustand &z);
 
-// Schliesst das Einmessen ab. minBeugungGrad: so gross muss die Beugung (Spannweite) sein.
+// Schliesst das Einmessen am Ende von Phase 3 ab. minBeugungGrad: so gross muss die Beugung
+// (Spannweite) sein. Prüft alles, was noch nicht bestanden ist.
 // true  = neue Referenz und Achse gesetzt, die Lage ist bekannt.
-// false = Abbruch (Beugung zu klein oder Arm nicht ruhig): alte Referenz und Achse bleiben.
+// false = Abbruch (Grund siehe einmessenGrund): alte Referenz und Achse bleiben.
 bool einmessenAbschliessen(EllbogenZustand &z, float minBeugungGrad);
 
 // Bricht ein laufendes Einmessen ab (z. B. IMU ausgefallen). Referenz und Achse bleiben.
@@ -241,5 +275,17 @@ bool ellbogenAbweichung(const EllbogenZustand &z, float &abweichungGrad);
 // Wird nach einem IMU-Ausfall aufgerufen: Referenz, Achse und Gyro-Fehler bleiben,
 // die Lage gilt als unbekannt (höchstens 5 s nach der Wiederkehr wieder bekannt).
 void ellbogenLageVerwerfen(EllbogenZustand &z);
+
+// ---------------------------------------------------------------------
+// Bestätigung beim Einmessen (REQ-004)
+// ---------------------------------------------------------------------
+
+// true für ein Zeichen vom Seriellen Monitor, das als Bestätigung zählt:
+// Leerzeichen ' ', Zeilenende '\n' oder '\r'. Alle anderen Zeichen: false.
+bool istBestaetigungsZeichen(char zeichen);
+
+// true, wenn seit wartenSeitMs mindestens maxMs Millisekunden vergangen sind.
+// Stimmt auch, wenn millis() dazwischen überläuft (nach ca. 49 Tagen wieder bei 0).
+bool wartezeitAbgelaufen(unsigned long wartenSeitMs, unsigned long jetztMs, unsigned long maxMs);
 
 #endif

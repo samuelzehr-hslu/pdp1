@@ -18,8 +18,8 @@ Checkliste für morgen. Pro Punkt ein Satz. Abhaken, und neben jedem Test **ok**
 ### REQ-002: Einmessen und Winkel
 
 - [ ] **T5 (AK-9):** Nach dem Einschalten erscheint auf dem Seriellen Monitor etwa jede Sekunde `Keine Referenz`, und die LED bleibt beim Überstrecken aus.
-- [ ] **T6 (AK-6):** Das Einmessen mit Tastendruck, 2 s still, 2 Mal beugen mit kleinem Oberarm-Kreis und einmal Hand drehen klappt und endet nach etwa 7,5 s mit der Bestätigung (ein längeres Aufleuchten).
-- [ ] **T7 (AK-6):** Die Stösse kommen zur richtigen Zeit: einer nach 2 s («jetzt bewegen»), zwei kurze nach 6 s («jetzt Hand drehen»).
+- [ ] **T6 (AK-6):** Das Einmessen mit Tastendruck, 2 s still, 2 Mal beugen mit kleinem Oberarm-Kreis und einmal Hand drehen klappt und endet nach etwa 7,5 s mit der Bestätigung (ein längeres Aufleuchten). *(Hinweis: Ab REQ-004 läuft das Einmessen nicht mehr am Stück, zwischen den Phasen wartet das Gerät auf Enter/Taste. Dann diesen Test nach `docs/tests/board-test-REQ-004.md` (B-2) machen.)*
+- [ ] **T7 (AK-6):** Die Stösse kommen zur richtigen Zeit: einer nach 2 s («jetzt bewegen»), zwei kurze nach 6 s («jetzt Hand drehen»). *(Hinweis: Ab REQ-004 beginnt Phase 2 mit einem Stoss direkt nach der Bestätigung, Phase 3 mit zwei Stössen; siehe `board-test-REQ-004.md`, B-3 und B-4.)*
 - [ ] **T8 (AK-7b):** Wer in Phase 1 den Arm bewegt, bekommt `Einmessen abgebrochen - Grund: ruhig`.
 - [ ] **T9 (AK-7a):** Wer in Phase 2 kaum beugt, bekommt `Einmessen abgebrochen - Grund: Beugung`.
 - [ ] **T10 (AK-7d):** Wer in Phase 2 den Oberarm still hängen lässt, bekommt `Einmessen abgebrochen - Grund: Oberarm`.

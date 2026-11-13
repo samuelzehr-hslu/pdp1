@@ -1,5 +1,9 @@
 # Wokwi-Szenarien (Störfälle)
 
+> **ÜBERHOLT durch REQ-004 (Stand 2026-11-13):** Das Einmessen läuft nicht mehr am Stück. Nach Phase 1 und Phase 2 wartet das Gerät auf Taste/Enter.
+> Alle Szenarien mit «Vorspann Einmessen» und die Einmess-Szenarien von REQ-002 (`req002_w2` bis `w6`) sind damit veraltet und «nicht geprüft».
+> Liste und Plan: `docs/wokwi/REQ-004-stoerfaelle.md`. (Wokwi-Kontingent aufgebraucht, nichts angepasst.)
+
 **Stand REQ-002 (Runde 2):** Wokwi hat ein **Gyroskop**. Die Regler heissen `rotationX`, `rotationY`, `rotationZ` (Grad/s) und `accelX/Y/Z` (g). `gyroX`/`gyroY`
 gibt es nicht (Wokwi meldet dafür keinen Fehler, die Werte bleiben 0: daher stand in Runde 1 fälschlich «kein Gyroskop», siehe `docs/wokwi/REQ-002-stoerfaelle.md`).
 Ein erfolgreiches Einmessen lässt sich darum nachstellen: `erzeuge_einmess_szenarien.py` rechnet die Einmess-Bewegung (Beugen/Strecken mit Oberarm-Kreisen)
