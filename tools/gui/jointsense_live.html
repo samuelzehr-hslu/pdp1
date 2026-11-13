@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JointSense Live</title>
+<!--
+  JointSense Live-GUI (REQ-006)
+  =============================
+  Öffnen: Doppelklick auf diese Datei, in Chrome oder Edge (Firefox/Safari können kein Web Serial).
+  Der Arduino muss mit GUI_MODUS 1 laufen (115200 Baud). Der Serielle Monitor der Arduino IDE muss zu sein.
+
+  Aufbau dieser Datei:
+    1. <style>   Farben und Layout (dunkles Dashboard)
+    2. <body>    die Kästen der Seite
+    3. <script>  das Programm:
+         a) Einstellungen und Speicher
+         b) Zeilen vom Arduino lesen (Protokoll aus REQ-006)
+         c) Verbinden über USB (Web Serial)
+         d) Anzeige: Statuskarte, Chips, Einmessen, Ereignisse
+         e) Graphen zeichnen (<canvas>)
+         f) Aufnahme als CSV
+         g) Demo-Modus (simulierte Zeilen, ohne Board)
+-->
+<style>
+  /* Alle Farben an einer Stelle (Werte aus dem Mockup) */
+  :root {
+    --hintergrund: #0E1116;
+    --kasten: #161B22;
+    --kasten-rand: #252C36;
+    --kasten-hell: #1C222B;
+    --text: #E6EAF0;
+    --text-mittel: #C9D1DC;
+    --text-leise: #8B95A5;
+    --blau: #4C9AFF;
+    --orange: #F2A93B;
+    --violett: #C77DFF;
+    --gruen-punkt: #2FBF71;
+    --rot-punkt: #F0524F;
+    --knopf-blau: #2B5FB0;
+    --mono: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
+  }
+  body {
+    margin: 0;
+    background: var(--hintergrund);
+    color: var(--text);
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  }
+  .seite { max-width: 1440px; margin: 0 auto; padding: 24px; box-sizing: border-box;
+           display: flex; flex-direction: column; gap: 16px; }
+  .reihe { display: flex; flex-wrap: wrap; gap: 16px; }
+  .kasten { background: var(--kasten); border: 1px solid var(--kasten-rand); border-radius: 16px;
+            padding: 20px; box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  h2, h3 { margin: 0; font-weight: 600; }
+  h2 { font-size: 16px; }
+  h3 { font-size: 14px; }
+  .leise { font-size: 12px; color: var(--text-leise); }
+  .mono { font-family: var(--mono); }
+  button {
+    height: 44px; padding: 0 14px; border-radius: 10px; background: var(--kasten);
+    border: 1px solid var(--kasten-rand); color: var(--text); font: 500 13px inherit; font-family: inherit; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: #3A4352; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.haupt { background: var(--knopf-blau); border-color: var(--knopf-blau); color: #fff; font-weight: 600; }
+
+  /* Kopfzeile */
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .titel { display: flex; align-items: center; gap: 14px; }
+  .knoepfe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .anzeige { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 10px;
+             background: var(--kasten); border: 1px solid var(--kasten-rand); font-size: 13px; color: var(--text-mittel); }
+  .punkt { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .rec { background: #2A1517; border-color: #5A2629; color: #FF9A97; font-family: var(--mono); }
+
+  /* Statuskarte */
+  #karte { flex: 1 1 320px; max-width: 100%; box-sizing: border-box; border-radius: 16px; padding: 24px;
+           display: flex; flex-direction: column; gap: 14px; color: #fff; min-height: 330px; transition: background 0.2s; }
+  .karte-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+                font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .motor-chip { text-transform: none; letter-spacing: 0; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,0.25); }
+  #karteName { font-size: 46px; font-weight: 700; line-height: 1; }
+  #karteText { font-size: 15px; line-height: 1.4; }
+  #karteAbw { font-family: var(--mono); font-size: 68px; font-weight: 600; line-height: 1; }
+  .karte-fuss { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; padding-top: 12px;
+                border-top: 1px solid rgba(255,255,255,0.25); }
+
+  /* Graphen */
+  .graph-rahmen { position: relative; }
+  canvas { display: block; width: 100%; }
+  .keine-daten { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
+  .keine-daten span { padding: 10px 16px; border-radius: 10px; background: #2A1E0C; border: 1px dashed #B8862E;
+                      font-size: 13px; font-weight: 600; color: #F5C46B; text-align: center; }
+  .kopf-zeile { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .legende { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-mittel); }
+  .legende span { display: inline-flex; align-items: center; gap: 6px; }
+  .legende b { font-family: var(--mono); font-weight: 600; color: var(--text); min-width: 56px; text-align: right; }
+  .strich { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+          background: var(--kasten-hell); border: 1px solid #2A313C; font-size: 12px; color: var(--text-mittel); }
+  .chip b { color: var(--text); font-weight: 600; }
+
+  /* Einmessen */
+  .schritte { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .schritt { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; background: var(--kasten-hell); }
+  .schritt b { font-size: 14px; }
+  .balken-zeile { display: flex; align-items: center; gap: 12px; }
+  .balken-name { width: 72px; font-size: 13px; color: var(--text-mittel); flex: none; }
+  .balken { flex: 1; height: 8px; border-radius: 4px; background: var(--kasten-rand); overflow: hidden; }
+  .balken div { height: 8px; border-radius: 4px; width: 0%; background: var(--blau); }
+  .balken-wert { width: 84px; text-align: right; font-family: var(--mono); font-size: 12px; flex: none; }
+
+  /* Ereignisse */
+  #ereignisse { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+  .ereignis { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #222934; }
+  .ereignis .text { flex: 1; font-size: 13px; }
+  .ereignis .zeit { font-family: var(--mono); font-size: 12px; color: var(--text-leise); }
+
+  .fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 16px; border-radius: 12px;
+          border: 1px dashed #36404E; font-size: 13px; color: var(--text-mittel); }
+  .fuss label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
+  @media (max-width: 600px) {
+    .seite { padding: 16px; }
+    #karteName { font-size: 36px; }
+    #karteAbw { font-size: 52px; }
+  }
+</style>
+</head>
+<body>
+<div class="seite">
+
+  <!-- 1. Kopfzeile -->
+  <header>
+    <div class="titel">
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M6 24 L14 12 L26 9" fill="none" stroke="#E6EAF0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="14" cy="12" r="3.5" fill="#0E1116" stroke="#4C9AFF" stroke-width="2.5"/>
+      </svg>
+      <div>
+        <div style="font-size:20px;font-weight:700">JointSense Live</div>
+        <div class="leise">Ellbogen-Überstreckung · 2 IMUs · Live-Daten vom Arduino</div>
+      </div>
+    </div>
+    <div class="knoepfe">
+      <span class="anzeige"><span class="punkt" id="verbPunkt" style="background:#8B95A5"></span><span id="verbText">Nicht verbunden</span></span>
+      <span class="anzeige rec" id="recAnzeige" style="display:none"><span class="punkt" style="background:#F0524F"></span>REC <span id="recZeit">0:00</span></span>
+      <button id="knopfAufnahme">Aufnahme (CSV)</button>
+      <button id="knopfPause">Anhalten</button>
+      <button id="knopfVerbinden" class="haupt">Verbinden</button>
+    </div>
+  </header>
+
+  <!-- 2. Statuskarte und 3. Graph Abweichung -->
+  <div class="reihe">
+    <section id="karte" aria-label="Ellbogen-Status" style="background:#3A4352">
+      <div class="karte-kopf"><span>Ellbogen-Status</span><span class="motor-chip">Motor: <span id="karteMotor">–</span></span></div>
+      <div id="karteName">KEINE DATEN</div>
+      <div id="karteText">Noch keine Daten vom Arduino.</div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:4px">
+        <span id="karteAbw">—</span>
+        <span style="font-size:13px">Abweichung von der gestreckten Referenz (0°)</span>
+      </div>
+      <div class="karte-fuss">
+        <span>Grenzwert <b class="mono" id="karteGrenz">—</b></span>
+        <span>Abstand <b class="mono" id="karteAbstand">—</b></span>
+      </div>
+    </section>
+
+    <section class="kasten" style="flex: 999 1 560px">
+      <div class="kopf-zeile">
+        <div>
+          <h2>Ellbogenwinkel – Abweichung</h2>
+          <div class="leise">Letzte 10 s · über der roten Linie = Überstreckung (Hysterese gestrichelt)</div>
+        </div>
+        <div class="legende">
+          <span><i class="strich" style="background:#E6EAF0"></i>Abweichung</span>
+          <span><i class="strich" style="background:#F0524F"></i>über Grenzwert</span>
+        </div>
+      </div>
+      <div class="graph-rahmen">
+        <canvas id="graphAbw" style="height:240px"></canvas>
+        <div class="keine-daten" id="abwFehlt"><span id="abwFehltText">Keine Daten</span></div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
+  </div>
+
+  <!-- 4. Vier Graphen der IMUs (werden unten im Programm erzeugt) -->
+  <div class="reihe" id="imuGraphen"></div>
+
+  <!-- 5. Einmessen und 6. Ereignisse -->
+  <div class="reihe">
+    <section class="kasten" style="flex:1 1 460px">
+      <div class="kopf-zeile" style="align-items:center">
+        <div>
+          <h3>Einmessen</h3>
+          <div class="leise" id="einText">Noch nicht eingemessen</div>
+        </div>
+        <button id="knopfEinmessen">Einmessen / Bestätigen</button>
+      </div>
+      <div class="schritte">
+        <div class="schritt"><span class="leise">Schritt 1 · Arm hängen lassen, still halten</span><b id="schritt1Text">–</b></div>
+        <div class="schritt"><span class="leise">Schritt 2 · Arm frei bewegen</span><b id="schritt2Text">–</b></div>
+      </div>
+      <div id="balkenListe" style="display:flex;flex-direction:column;gap:10px"></div>
+    </section>
+
+    <section class="kasten" style="flex:1 1 460px">
+      <div>
+        <h3>Ereignisse</h3>
+        <div class="leise">Ersetzt den Seriellen Monitor – neueste oben</div>
+      </div>
+      <div id="ereignisse"></div>
+    </section>
+  </div>
+
+  <div class="fuss">
+    <label><input type="checkbox" id="demoHaken"> Demo-Modus (simulierte Daten, ohne Board)</label>
+    <span class="leise">Hinweis: Beim Verbinden startet der Arduino Uno neu (ca. 2 s). Der Serielle Monitor der Arduino IDE muss geschlossen sein.</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// =====================================================================
+// a) EINSTELLUNGEN UND SPEICHER
+// =====================================================================
+
+const BAUD = 115200;                // muss zur Firmware passen (GUI_MODUS 1)
+const FENSTER_MS = 10000;           // die Graphen zeigen die letzten 10 s
+const LUECKE_MS = 150;              // fehlen länger als 150 ms Daten: Linie unterbrechen
+const KEINE_DATEN_MS = 1000;        // so lange ohne D-Zeile = "keine Daten"
+const ACC_PRO_G = 16384;            // Rohwert pro g (MPU6050, +-2 g)
+const GYRO_PRO_GRAD = 65.5;         // Rohwert pro Grad/s (MPU6050, +-500 Grad/s)
+const ZYKLUS_GRENZE_MS = 15;        // REQ-002 AK-15
+
+// Farben für x / y / z (bewusst kein Rot/Grün, wegen Farbenblindheit)
+const FARBE_X = "#4C9AFF", FARBE_Y = "#F2A93B", FARBE_Z = "#C77DFF";
+
+// Bedeutung der Status-Bits (siehe REQ-006). "status & BIT_..." ist ungleich 0, wenn das Bit gesetzt ist.
+const BIT_IMU1_AUSGEFALLEN = 1;
+const BIT_IMU2_AUSGEFALLEN = 2;
+const BIT_REFERENZ = 4;
+const BIT_LAGE = 8;
+const BIT_ZU_WEIT = 16;
+const BIT_MOTOR = 32;
+const BIT_UEBERSTEUERT = 64;
+
+// Texte zu den Ereignis-Codes (E-Zeilen). Punktfarbe: blau = Einmessen, grün = gut, orange = Fehler.
+const EREIGNIS_TEXTE = {
+  START:                       ["Arduino gestartet", "#8B95A5"],
+  IMU1_OK:                     ["IMU 1 (Oberarm): OK", "#2FBF71"],
+  IMU1_FEHLER:                 ["IMU 1 (Oberarm): FEHLER – Verkabelung prüfen", "#F2A93B"],
+  IMU2_OK:                     ["IMU 2 (Unterarm): OK", "#2FBF71"],
+  IMU2_FEHLER:                 ["IMU 2 (Unterarm): FEHLER – Verkabelung prüfen", "#F2A93B"],
+  AUSFALL:                     ["FEHLER: IMU ausgefallen – Warnung ist aus", "#F2A93B"],
+  IMU_WIEDER_DA:               ["IMUs wieder da", "#2FBF71"],
+  SCHRITT1_START:              ["Einmessen gestartet – Schritt 1: Arm hängen lassen und still halten", "#4C9AFF"],
+  SCHRITT1_FERTIG:             ["Schritt 1 fertig – jetzt bestätigen für Schritt 2", "#4C9AFF"],
+  SCHRITT2_START:              ["Schritt 2: Arm frei bewegen (beugen, Oberarm bewegen, Hand drehen)", "#4C9AFF"],
+  REF_GESETZT:                 ["Referenz gesetzt – Einmessen fertig", "#2FBF71"],
+  EINMESS_ABBRUCH_RUHIG:       ["Einmessen abgebrochen: nie 2 s am Stück ruhig", "#F2A93B"],
+  EINMESS_ABBRUCH_BESTAETIGUNG:["Einmessen abgebrochen: keine Bestätigung", "#F2A93B"],
+  EINMESS_ABBRUCH_BEUGUNG:     ["Einmessen abgebrochen: zu wenig gebeugt", "#F2A93B"],
+  EINMESS_ABBRUCH_OBERARM:     ["Einmessen abgebrochen: Oberarm zu wenig bewegt", "#F2A93B"],
+  EINMESS_ABBRUCH_HAND:        ["Einmessen abgebrochen: Hand zu wenig gedreht", "#F2A93B"],
+  EINMESS_ABBRUCH_IMU:         ["Einmessen abgebrochen: IMU-Messung fehlte", "#F2A93B"],
+};
+
+// Aussehen der Statuskarte für jeden Zustand
+const KARTEN = {
+  OK:             { name: "OK",             farbe: "#16774A", text: "Arm im sicheren Bereich." },
+  UEBERSTRECKT:   { name: "ÜBERSTRECKT",    farbe: "#B83532", text: "Arm ist über dem Grenzwert – Vibrationsmotor läuft." },
+  EINMESSEN:      { name: "EINMESSEN",      farbe: "#2B5FB0", text: "Einmessen läuft – keine Warnung während dem Einmessen." },
+  SENSORFEHLER:   { name: "SENSORFEHLER",   farbe: "#8A5710", text: "Eine IMU antwortet nicht – Überstreckungs-Warnung ist aus." },
+  KEINE_REFERENZ: { name: "NICHT EINGEMESSEN", farbe: "#3A4352", text: "Noch keine Referenz – Knopf «Einmessen» drücken." },
+  KEINE_DATEN:    { name: "KEINE DATEN",    farbe: "#3A4352", text: "Noch keine Daten vom Arduino." },
+};
+
+// Der Speicher: was wir zuletzt vom Arduino wissen
+const zustand = {
+  grenzwert: null,         // Grad (aus G-Zeile)
+  hysterese: null,         // Grad (aus G-Zeile)
+  letzte: null,            // letzte D-Zeile als Objekt (siehe datenZeile)
+  letzteDatenZeit: 0,      // wann kam die letzte D-Zeile? (performance.now())
+  fortschritt: null,       // letzte P-Zeile als Objekt
+  zyklusMaxMs: null,       // aus Z-Zeile
+  datenrate: null,         // gemessene D-Zeilen pro Sekunde
+  zaehlerRate: 0,          // zählt D-Zeilen in der laufenden Sekunde
+};
+const verlauf = [];        // die D-Zeilen der letzten 10 s (für die Graphen)
+let angehalten = false;    // true = Graphen eingefroren
+
+
+// =====================================================================
+// b) ZEILEN VOM ARDUINO LESEN (Protokoll REQ-006)
+// =====================================================================
+
+// Macht aus einem Text eine ganze Zahl. Leeres Feld oder Unsinn -> null (= "Wert fehlt").
+function zahl(text) {
+  if (!/^-?\d{1,10}$/.test(text)) {
+    return null;
+  }
+  return parseInt(text, 10);
+}
+
+// Bekommt eine ganze Zeile (ohne Zeilenende) und verteilt sie je nach erstem Buchstaben.
+// Kaputte oder unbekannte Zeilen werden still weggeworfen.
+function zeileVerarbeiten(zeile) {
+  zeile = zeile.trim();
+  if (zeile.length === 0 || zeile.length > 200) {
+    return;
+  }
+  const teile = zeile.split(",");
+  const art = teile[0];
+  if (art === "D") {
+    datenZeile(teile);
+  } else if (art === "P") {
+    fortschrittZeile(teile);
+  } else if (art === "E") {
+    if (teile.length === 2) {
+      ereignisMelden(teile[1]);
+    }
+  } else if (art === "G") {
+    if (teile.length === 3 && zahl(teile[1]) !== null && zahl(teile[2]) !== null) {
+      zustand.grenzwert = zahl(teile[1]) / 10;
+      zustand.hysterese = zahl(teile[2]) / 10;
+    }
+  } else if (art === "Z") {
+    if (teile.length === 2 && zahl(teile[1]) !== null) {
+      zustand.zyklusMaxMs = zahl(teile[1]) / 1000;
+    }
+  }
+}
+
+// D,<millis>,<ax1>,<ay1>,<az1>,<gx1>,<gy1>,<gz1>,<ax2>,<ay2>,<az2>,<gx2>,<gy2>,<gz2>,<abw_zehntel>,<status>,<schritt>
+function datenZeile(teile) {
+  if (teile.length !== 17) {
+    return;
+  }
+  const z = [];
+  for (let i = 1; i < 17; i++) {
+    z.push(zahl(teile[i]));
+  }
+  // millis, status und schritt müssen immer da sein
+  if (z[0] === null || z[14] === null || z[15] === null) {
+    return;
+  }
+  const jetzt = performance.now();
+  const d = {
+    zeit: jetzt,                                  // Zeit am PC, für die x-Achse der Graphen
+    millis: z[0],
+    acc1: imuWerte(z, 1, ACC_PRO_G),              // [x, y, z] in g oder null
+    gyro1: imuWerte(z, 4, GYRO_PRO_GRAD),         // [x, y, z] in Grad/s oder null
+    acc2: imuWerte(z, 7, ACC_PRO_G),
+    gyro2: imuWerte(z, 10, GYRO_PRO_GRAD),
+    abw: z[13] === null ? null : z[13] / 10,      // Grad oder null
+    status: z[14],
+    schritt: z[15],
+  };
+  zustand.letzte = d;
+  zustand.letzteDatenZeit = jetzt;
+  zustand.zaehlerRate++;
+  aufnahmeZeile(jetzt, teile);
+
+  if (!angehalten) {
+    verlauf.push(d);
+    // Alles, was älter als 10 s ist, vorne wegwerfen
+    while (verlauf.length > 0 && jetzt - verlauf[0].zeit > FENSTER_MS) {
+      verlauf.shift();
+    }
+  }
+}
+
+// Holt 3 Rohwerte ab Position "start" und rechnet sie um. Fehlt einer: null (ganze IMU fehlt).
+function imuWerte(z, start, teiler) {
+  if (z[start] === null || z[start + 1] === null || z[start + 2] === null) {
+    return null;
+  }
+  return [z[start] / teiler, z[start + 1] / teiler, z[start + 2] / teiler];
+}
+
+// P,<ruhig_zehntelsek>,<beugung>,<oberarm>,<hand>,<achse_prozent>
+function fortschrittZeile(teile) {
+  if (teile.length !== 6) {
+    return;
+  }
+  const z = teile.slice(1).map(zahl);
+  if (z.includes(null)) {
+    return;
+  }
+  zustand.fortschritt = { ruhig: z[0] / 10, beugung: z[1], oberarm: z[2], hand: z[3], achse: z[4] };
+}
+
+
+// =====================================================================
+// c) VERBINDEN ÜBER USB (Web Serial)
+// =====================================================================
+
+let port = null;               // der USB-Anschluss
+let leser = null;              // liest Bytes vom Arduino
+let manuellGetrennt = false;   // true = Benutzer hat "Trennen" gedrückt, dann nicht neu verbinden
+let verbindetGerade = false;
+
+// Verbindet mit einem Port (öffnet ihn mit 115200 Baud) und startet das Lesen.
+async function verbinden(neuerPort) {
+  if (verbindetGerade || port !== null) {
+    return;
+  }
+  verbindetGerade = true;
+  try {
+    await neuerPort.open({ baudRate: BAUD });
+    port = neuerPort;
+    manuellGetrennt = false;
+    verbindungAnzeigen();
+    ereignisText("Verbunden · " + portName(port) + " · " + BAUD + " Baud (Arduino startet neu …)", "#8B95A5");
+    const verbundenUm = performance.now();
+    // Kommt nach 5 s noch keine D-Zeile, läuft vermutlich die alte Firmware (Text-Modus)
+    setTimeout(() => {
+      if (port !== null && zustand.letzteDatenZeit < verbundenUm) {
+        ereignisText("Keine Datenzeilen – ist die Firmware mit GUI_MODUS 1 hochgeladen?", "#F2A93B");
+      }
+    }, 5000);
+    leseSchleife();   // läuft im Hintergrund weiter
+  } catch (fehler) {
+    ereignisText("Verbinden fehlgeschlagen: " + fehler.message + " (Serieller Monitor offen?)", "#F2A93B");
+  }
+  verbindetGerade = false;
+}
+
+// Liest so lange Bytes, bis die Verbindung weg ist. Macht daraus Zeilen.
+async function leseSchleife() {
+  const decoder = new TextDecoder();
+  let rest = "";                                  // angefangene Zeile, die noch kein Ende hat
+  try {
+    leser = port.readable.getReader();
+    while (true) {
+      const { value, done } = await leser.read();
+      if (done) {
+        break;
+      }
+      rest += decoder.decode(value, { stream: true });
+      const zeilen = rest.split("\n");
+      rest = zeilen.pop();                        // das letzte Stück ist noch nicht fertig
+      if (rest.length > 1000) {
+        rest = "";                                // Sicherheit: nie endlos sammeln
+      }
+      for (const zeile of zeilen) {
+        zeileVerarbeiten(zeile);
+      }
+    }
+  } catch (fehler) {
+    // passiert z. B., wenn das USB-Kabel gezogen wird
+  }
+  await aufraeumen();
+}
+
+// Schliesst alles und zeigt "nicht verbunden".
+async function aufraeumen() {
+  const warVerbunden = port !== null;
+  try { if (leser) { leser.releaseLock(); } } catch (e) {}
+  try { if (port) { await port.close(); } } catch (e) {}
+  leser = null;
+  port = null;
+  verbindungAnzeigen();
+  if (warVerbunden) {
+    ereignisText(manuellGetrennt ? "Getrennt" : "Verbindung verloren – verbinde neu, sobald der Arduino wieder da ist", "#8B95A5");
+  }
+}
+
+// Knopf "Trennen"
+async function trennen() {
+  manuellGetrennt = true;
+  if (leser) {
+    try { await leser.cancel(); } catch (e) {}    // beendet leseSchleife, die räumt dann auf
+  }
+}
+
+// Schickt ein "\n" an den Arduino (= Enter im Seriellen Monitor: Einmessen starten / bestätigen).
+async function bestaetigungSenden() {
+  if (demo.an) {
+    demoBestaetigung();
+    return;
+  }
+  if (port === null || !port.writable) {
+    ereignisText("Nicht verbunden – Bestätigung nicht gesendet", "#F2A93B");
+    return;
+  }
+  const schreiber = port.writable.getWriter();
+  try {
+    await schreiber.write(new TextEncoder().encode("\n"));
+    ereignisText("Bestätigung gesendet (Enter)", "#8B95A5");
+  } finally {
+    schreiber.releaseLock();
+  }
+}
+
+// Web Serial kennt den COM-Namen nicht. Wir zeigen, ob es ein Arduino ist.
+function portName(p) {
+  const info = p.getInfo();
+  if (info.usbVendorId === 0x2341 || info.usbVendorId === 0x2A03) {
+    return "Arduino (USB)";
+  }
+  return "USB-Seriell";
+}
+
+// Knopf "Verbinden" / "Trennen"
+async function knopfVerbindenGedrueckt() {
+  if (port !== null) {
+    await trennen();
+    return;
+  }
+  if (demo.an) {
+    document.getElementById("demoHaken").checked = false;
+    demoStoppen();
+  }
+  try {
+    const gewaehlt = await navigator.serial.requestPort();   // Browser fragt: welcher Port?
+    await verbinden(gewaehlt);
+  } catch (e) {
+    // Benutzer hat abgebrochen
+  }
+}
+
+// Beim Öffnen der Seite: automatisch mit dem zuletzt erlaubten Port verbinden.
+async function startVerbindung() {
+  if (!("serial" in navigator)) {
+    ereignisText("Dieser Browser kann kein Web Serial. Bitte Chrome oder Edge benutzen.", "#F2A93B");
+    document.getElementById("knopfVerbinden").disabled = true;
+    return;
+  }
+  // Wird ein erlaubter Arduino eingesteckt: automatisch neu verbinden
+  navigator.serial.addEventListener("connect", (ereignis) => {
+    if (port === null && !manuellGetrennt && !demo.an) {
+      verbinden(ereignis.target);
+    }
+  });
+  const erlaubte = await navigator.serial.getPorts();
+  if (erlaubte.length > 0) {
+    verbinden(erlaubte[0]);
+  } else {
+    ereignisText("Noch kein Port erlaubt – oben auf «Verbinden» klicken", "#8B95A5");
+  }
+}
+
+
+// =====================================================================
+// d) ANZEIGE: Statuskarte, Chips, Einmessen, Ereignisse
+// =====================================================================
+
+// Entscheidet, welche Statuskarte gezeigt wird. Nur aus den Werten der Firmware, nichts selbst rechnen!
+//   status:  Zahl mit den Status-Bits (z. B. status & BIT_ZU_WEIT)
+//   schritt: 0 = kein Einmessen, 1 = still, 2 = warten, 3 = frei bewegen
+// Rückgabe: ein Schlüssel aus KARTEN, also "OK", "UEBERSTRECKT", "EINMESSEN", "SENSORFEHLER" oder "KEINE_REFERENZ".
+function karteBestimmen(status, schritt) {
+  // Reihenfolge vom Team festgelegt: die erste passende Abfrage gewinnt.
+  // 1. Sensorfehler: Fehlt eine IMU, ist nichts anderes mehr glaubwürdig (fail-safe).
+  if (status & (BIT_IMU1_AUSGEFALLEN | BIT_IMU2_AUSGEFALLEN)) {
+    return "SENSORFEHLER";
+  }
+  // 2. Überstreckt: Die Firmware warnt gerade (Bit "zu weit").
+  if (status & BIT_ZU_WEIT) {
+    return "UEBERSTRECKT";
+  }
+  // 3. Einmessen läuft (Schritt 1, Warten oder Schritt 2). Steht vor "nicht eingemessen",
+  //    damit auch das allererste Einmessen blau angezeigt wird.
+  if (schritt !== 0) {
+    return "EINMESSEN";
+  }
+  // 4. Nicht eingemessen: Es gibt noch keine Referenz (0°).
+  if (!(status & BIT_REFERENZ)) {
+    return "KEINE_REFERENZ";
+  }
+  // 5. Sonst ist alles in Ordnung.
+  return "OK";
+}
+
+// Gibt eine Zahl mit Vorzeichen und echter Minus-Strich zurück, z. B. "+3.2°" oder "−12.0°".
+function zahlText(wert, stellen, einheit) {
+  if (wert === null || wert === undefined) {
+    return "—";
+  }
+  return (wert >= 0 ? "+" : "−") + Math.abs(wert).toFixed(stellen) + (einheit || "");
+}
+
+function verbindungAnzeigen() {
+  const verbunden = port !== null;
+  document.getElementById("verbPunkt").style.background = verbunden || demo.an ? "#2FBF71" : "#8B95A5";
+  let text = "Nicht verbunden";
+  if (demo.an) {
+    text = "Demo-Modus (keine echten Daten)";
+  } else if (verbunden) {
+    text = "Verbunden · " + portName(port) + " · " + BAUD + " Baud";
+  }
+  document.getElementById("verbText").textContent = text;
+  document.getElementById("knopfVerbinden").textContent = verbunden ? "Trennen" : "Verbinden";
+}
+
+function karteAnzeigen() {
+  const d = zustand.letzte;
+  const datenAlt = d === null || performance.now() - zustand.letzteDatenZeit > KEINE_DATEN_MS;
+  const schluessel = datenAlt ? "KEINE_DATEN" : karteBestimmen(d.status, d.schritt);
+  const karte = KARTEN[schluessel] || KARTEN.KEINE_DATEN;
+
+  document.getElementById("karte").style.background = karte.farbe;
+  document.getElementById("karteName").textContent = karte.name;
+  document.getElementById("karteText").textContent = karte.text;
+  document.getElementById("karteMotor").textContent = datenAlt ? "–" : ((d.status & BIT_MOTOR) ? "AN" : "aus");
+
+  const abw = datenAlt ? null : d.abw;
+  document.getElementById("karteAbw").textContent = zahlText(abw, 1, "°");
+  const g = zustand.grenzwert;
+  document.getElementById("karteGrenz").textContent = g === null ? "—" : zahlText(g, 1, "°");
+  let abstand = "—";
+  if (abw !== null && g !== null) {
+    const frei = g - abw;
+    abstand = frei >= 0 ? frei.toFixed(1) + "° frei" : Math.abs(frei).toFixed(1) + "° drüber";
+  }
+  document.getElementById("karteAbstand").textContent = abstand;
+
+  // Hinweis über dem Graphen, wenn die Abweichung fehlt
+  let fehltText = "";
+  if (datenAlt) {
+    fehltText = "Keine Daten vom Arduino";
+  } else if (abw === null) {
+    if (d.status & (BIT_IMU1_AUSGEFALLEN | BIT_IMU2_AUSGEFALLEN)) {
+      fehltText = "Keine Abweichung – IMU ausgefallen";
+    } else if (d.schritt !== 0) {
+      fehltText = "Während dem Einmessen keine Abweichung";
+    } else if (!(d.status & BIT_REFERENZ)) {
+      fehltText = "Noch keine Referenz – bitte einmessen";
+    } else if (!(d.status & BIT_LAGE)) {
+      fehltText = "Lage wird gesucht … (nach einem Ausfall)";
+    } else {
+      fehltText = "Keine Abweichung in diesem Moment";
+    }
+  }
+  document.getElementById("abwFehlt").style.display = fehltText ? "flex" : "none";
+  document.getElementById("abwFehltText").textContent = fehltText;
+}
+
+// Ein Chip: farbiger Punkt, Name, Wert
+function chip(name, wert, farbe) {
+  return '<span class="chip"><span class="punkt" style="background:' + farbe + '"></span>' +
+         name + ' <b>' + wert + '</b></span>';
+}
+
+function chipsAnzeigen() {
+  const d = zustand.letzte;
+  const datenAlt = d === null || performance.now() - zustand.letzteDatenZeit > KEINE_DATEN_MS;
+  let html = "";
+  html += imuChip("IMU 1 Oberarm", d, datenAlt, BIT_IMU1_AUSGEFALLEN, d ? d.acc1 : null);
+  html += imuChip("IMU 2 Unterarm", d, datenAlt, BIT_IMU2_AUSGEFALLEN, d ? d.acc2 : null);
+  if (datenAlt) {
+    html += chip("Referenz", "—", "#8B95A5");
+  } else if (d.schritt !== 0) {
+    html += chip("Referenz", "wird gesetzt", "#4C9AFF");
+  } else if (d.status & BIT_REFERENZ) {
+    html += chip("Referenz", "gesetzt", "#2FBF71");
+  } else {
+    html += chip("Referenz", "fehlt", "#F2A93B");
+  }
+  html += chip("Datenrate", zustand.datenrate === null ? "—" : zustand.datenrate + " Hz", "#8B95A5");
+  const zm = zustand.zyklusMaxMs;
+  html += chip("Zyklus max", zm === null ? "—" : zm.toFixed(1) + " ms", zm !== null && zm >= ZYKLUS_GRENZE_MS ? "#F0524F" : "#8B95A5");
+  if (!datenAlt && (d.status & BIT_UEBERSTEUERT)) {
+    html += chip("Gyro", "übersteuert", "#F2A93B");
+  }
+  document.getElementById("chips").innerHTML = html;
+}
+
+function imuChip(name, d, datenAlt, bit, werte) {
+  if (datenAlt) {
+    return chip(name, "—", "#8B95A5");
+  }
+  if (d.status & bit) {
+    return chip(name, "ausgefallen", "#F0524F");
+  }
+  if (werte === null) {
+    return chip(name, "Messung fehlt", "#F2A93B");
+  }
+  return chip(name, "OK", "#2FBF71");
+}
+
+// Die vier Balken in "Einmessen": Name, Ziel, Einheit, Feld in zustand.fortschritt
+const BALKEN = [
+  ["Beugung", 30, "°", "beugung"],
+  ["Oberarm", 15, "°", "oberarm"],
+  ["Hand", 45, "°", "hand"],
+  ["Achse", 100, "%", "achse"],
+];
+
+function balkenAufbauen() {
+  let html = "";
+  for (const b of BALKEN) {
+    html += '<div class="balken-zeile"><span class="balken-name">' + b[0] + '</span>' +
+            '<div class="balken"><div id="balken_' + b[3] + '"></div></div>' +
+            '<span class="balken-wert" id="wert_' + b[3] + '">–</span></div>';
+  }
+  document.getElementById("balkenListe").innerHTML = html;
+}
+
+function einmessenAnzeigen() {
+  const d = zustand.letzte;
+  const schritt = d ? d.schritt : 0;
+  const referenz = d ? (d.status & BIT_REFERENZ) !== 0 : false;
+  const f = zustand.fortschritt;
+  const knopf = document.getElementById("knopfEinmessen");
+
+  let s1 = "–", s2 = "–", text = referenz ? "Referenz gesetzt" : "Noch nicht eingemessen";
+  if (schritt === 1) {
+    s1 = "Ruhig " + (f ? f.ruhig.toFixed(1) : "0.0") + " / 2.0 s";
+    text = "Schritt 1 läuft – Fortschritt kommt 1× pro Sekunde vom Arduino";
+    knopf.textContent = "Läuft …";
+    knopf.disabled = true;           // die Firmware ignoriert Bestätigungen in Schritt 1 und 2
+  } else if (schritt === 2) {
+    s1 = "Fertig";
+    s2 = "Wartet auf Bestätigung";
+    text = "Schritt 1 fertig – Knopf drücken für Schritt 2";
+    knopf.textContent = "Bestätigen (Schritt 2)";
+    knopf.disabled = false;
+  } else if (schritt === 3) {
+    s1 = "Fertig";
+    s2 = "Läuft";
+    text = "Schritt 2 läuft – Arm frei bewegen";
+    knopf.textContent = "Läuft …";
+    knopf.disabled = true;
+  } else {
+    s1 = referenz ? "Fertig" : "–";
+    s2 = referenz ? "Fertig · Referenz gesetzt" : "–";
+    knopf.textContent = referenz ? "Neu einmessen" : "Einmessen starten";
+    knopf.disabled = false;
+  }
+  document.getElementById("schritt1Text").textContent = s1;
+  document.getElementById("schritt2Text").textContent = s2;
+  document.getElementById("einText").textContent = text;
+
+  // Balken: in Schritt 2 (und 3) aus der P-Zeile, nach dem Einmessen voll
+  for (const b of BALKEN) {
+    let wert = 0;
+    if (f && schritt === 3) {
+      wert = f[b[3]];
+    } else if (referenz && schritt === 0) {
+      wert = b[1];
+    }
+    const prozent = Math.max(0, Math.min(100, wert / b[1] * 100));
+    const balken = document.getElementById("balken_" + b[3]);
+    balken.style.width = prozent + "%";
+    balken.style.background = wert >= b[1] ? "#2FBF71" : "#4C9AFF";
+    document.getElementById("wert_" + b[3]).textContent = wert + "/" + b[1] + b[2];
+  }
+}
+
+// Ereignis aus einer E-Zeile in die Liste schreiben
+function ereignisMelden(code) {
+  if (code === "START") {
+    zustand.fortschritt = null;      // nach einem Neustart ist der alte Fortschritt ungültig
+  }
+  const eintrag = EREIGNIS_TEXTE[code];
+  if (eintrag) {
+    ereignisText(eintrag[0], eintrag[1]);
+  } else if (/^[A-Z0-9_]{1,40}$/.test(code)) {
+    ereignisText("Ereignis " + code, "#8B95A5");   // unbekannter Code: trotzdem zeigen
+  }
+}
+
+// Schreibt eine Zeile oben in die Ereignisliste (höchstens 100 Zeilen)
+function ereignisText(text, farbe) {
+  const liste = document.getElementById("ereignisse");
+  const zeile = document.createElement("div");
+  zeile.className = "ereignis";
+  const punkt = document.createElement("span");
+  punkt.className = "punkt";
+  punkt.style.background = farbe;
+  const t = document.createElement("span");
+  t.className = "text";
+  t.textContent = text;                           // textContent: Text wird nie als HTML ausgeführt
+  const zeit = document.createElement("span");
+  zeit.className = "zeit";
+  zeit.textContent = new Date().toLocaleTimeString("de-CH");
+  zeile.append(punkt, t, zeit);
+  liste.prepend(zeile);
+  while (liste.children.length > 100) {
+    liste.lastChild.remove();
+  }
+}
+
+
+// =====================================================================
+// e) GRAPHEN ZEICHNEN (<canvas>)
+// =====================================================================
+
+const RAND_LINKS = 46;   // Platz links für die Beschriftung der y-Achse
+
+// Bereitet ein canvas vor (scharf auch auf hochauflösenden Bildschirmen) und gibt den Pinsel zurück.
+function canvasVorbereiten(canvas) {
+  const faktor = window.devicePixelRatio || 1;
+  const breite = canvas.clientWidth;
+  const hoehe = canvas.clientHeight;
+  if (canvas.width !== Math.round(breite * faktor) || canvas.height !== Math.round(hoehe * faktor)) {
+    canvas.width = Math.round(breite * faktor);
+    canvas.height = Math.round(hoehe * faktor);
+  }
+  const pinsel = canvas.getContext("2d");
+  pinsel.setTransform(faktor, 0, 0, faktor, 0, 0);
+  pinsel.clearRect(0, 0, breite, hoehe);
+  return { pinsel, breite, hoehe };
+}
+
+// Zeichnet einen Graphen.
+//   unten/oben:     Wertebereich der y-Achse
+//   marken:         Werte, bei denen eine Hilfslinie mit Beschriftung kommt
+//   linien:         Liste von { wert: Funktion(d) -> Zahl oder null, farbe, dicke }
+//   vorher:         Funktion, die vor den Linien zusätzlich zeichnet (z. B. rote Zone)
+function graphZeichnen(canvas, unten, oben, marken, einheit, linien, vorher) {
+  const { pinsel, breite, hoehe } = canvasVorbereiten(canvas);
+  const flaeche = breite - RAND_LINKS;
+  // Das Fenster endet bei der neuesten Messung (beim Anhalten bleibt es stehen)
+  const ende = verlauf.length > 0 ? verlauf[verlauf.length - 1].zeit : performance.now();
+  const xVon = (zeit) => RAND_LINKS + (1 - (ende - zeit) / FENSTER_MS) * flaeche;
+  const yVon = (wert) => {
+    const begrenzt = Math.max(unten, Math.min(oben, wert));
+    return hoehe - (begrenzt - unten) / (oben - unten) * hoehe;
+  };
+
+  // Hilfslinien und Beschriftung
+  pinsel.font = "11px " + getComputedStyle(document.body).getPropertyValue("--mono");
+  pinsel.textAlign = "right";
+  pinsel.textBaseline = "middle";
+  for (const m of marken) {
+    const y = Math.round(yVon(m)) + 0.5;
+    pinsel.strokeStyle = m === 0 ? "#3A4352" : "#232A34";
+    pinsel.lineWidth = 1;
+    pinsel.beginPath();
+    pinsel.moveTo(RAND_LINKS, y);
+    pinsel.lineTo(breite, y);
+    pinsel.stroke();
+    pinsel.fillStyle = "#8B95A5";
+    const text = (m > 0 ? "+" : m < 0 ? "−" : "") + Math.abs(m) + einheit;
+    pinsel.fillText(text, RAND_LINKS - 6, Math.max(7, Math.min(hoehe - 7, y)));
+  }
+
+  if (vorher) {
+    vorher(pinsel, RAND_LINKS, breite, yVon);
+  }
+
+  // Die Linien: bei fehlendem Wert oder Lücke in der Zeit wird der Stift angehoben
+  for (const linie of linien) {
+    pinsel.strokeStyle = linie.farbe;
+    pinsel.lineWidth = linie.dicke || 1.6;
+    pinsel.lineJoin = "round";
+    pinsel.beginPath();
+    let stiftUnten = false;
+    let letzteZeit = 0;
+    for (const d of verlauf) {
+      const wert = linie.wert(d);
+      if (wert === null || wert === undefined || (stiftUnten && d.zeit - letzteZeit > LUECKE_MS)) {
+        stiftUnten = false;
+      }
+      if (wert !== null && wert !== undefined) {
+        if (stiftUnten) {
+          pinsel.lineTo(xVon(d.zeit), yVon(wert));
+        } else {
+          pinsel.moveTo(xVon(d.zeit), yVon(wert));
+          stiftUnten = true;
+        }
+      }
+      letzteZeit = d.zeit;
+    }
+    pinsel.stroke();
+  }
+}
+
+// Graph der Abweichung mit roter Zone, Grenzwert und Hysterese
+function abwGraphZeichnen() {
+  const g = zustand.grenzwert;
+  const h = zustand.hysterese;
+  graphZeichnen(document.getElementById("graphAbw"), -75, 15, [15, 0, -15, -30, -45, -60, -75], "°",
+    [
+      { wert: (d) => d.abw, farbe: "#E6EAF0", dicke: 2 },
+      // Teile über dem Grenzwert dick und rot darüber zeichnen
+      { wert: (d) => (g !== null && d.abw !== null && d.abw > g ? d.abw : null), farbe: "#FF6B68", dicke: 3 },
+    ],
+    (pinsel, links, rechts, yVon) => {
+      if (g === null) {
+        return;
+      }
+      const yG = yVon(g);
+      pinsel.fillStyle = "rgba(240,82,79,0.14)";      // rote Zone über dem Grenzwert
+      pinsel.fillRect(links, 0, rechts - links, yG);
+      pinsel.strokeStyle = "#F0524F";
+      pinsel.lineWidth = 1.5;
+      pinsel.beginPath();
+      pinsel.moveTo(links, yG);
+      pinsel.lineTo(rechts, yG);
+      pinsel.stroke();
+      if (h !== null) {                               // Hysterese gestrichelt
+        const yH = yVon(g - h);
+        pinsel.setLineDash([4, 4]);
+        pinsel.globalAlpha = 0.6;
+        pinsel.lineWidth = 1;
+        pinsel.beginPath();
+        pinsel.moveTo(links, yH);
+        pinsel.lineTo(rechts, yH);
+        pinsel.stroke();
+        pinsel.setLineDash([]);
+        pinsel.globalAlpha = 1;
+      }
+      pinsel.fillStyle = "#FF8A87";
+      pinsel.textAlign = "right";
+      pinsel.textBaseline = "bottom";
+      pinsel.font = "600 11px sans-serif";
+      pinsel.fillText("Grenzwert " + zahlText(g, 1, "°"), rechts - 8, Math.max(14, yG - 3));
+    });
+}
+
+// Die vier IMU-Graphen: Titel, Untertitel, Feld in der D-Zeile, Bereich, Nachkommastellen, Einheit, welches Ausfall-Bit
+const IMU_GRAPHEN = [
+  ["IMU 1 · Oberarm – Beschleunigung", "in g · Bereich ±2 g", "acc1", 1.5, [1.5, 0, -1.5], 2, " g", BIT_IMU1_AUSGEFALLEN],
+  ["IMU 1 · Oberarm – Drehrate (Gyro)", "in °/s · Bereich ±500 °/s", "gyro1", 150, [150, 0, -150], 0, "", BIT_IMU1_AUSGEFALLEN],
+  ["IMU 2 · Unterarm – Beschleunigung", "in g · Bereich ±2 g", "acc2", 1.5, [1.5, 0, -1.5], 2, " g", BIT_IMU2_AUSGEFALLEN],
+  ["IMU 2 · Unterarm – Drehrate (Gyro)", "in °/s · Bereich ±500 °/s", "gyro2", 150, [150, 0, -150], 0, "", BIT_IMU2_AUSGEFALLEN],
+];
+
+function imuGraphenAufbauen() {
+  let html = "";
+  IMU_GRAPHEN.forEach((g, i) => {
+    html += '<section class="kasten" style="flex:1 1 460px;padding:18px 20px">' +
+      '<div class="kopf-zeile"><div><h3>' + g[0] + '</h3><div class="leise">' + g[1] + '</div></div>' +
+      '<div class="legende">' +
+        '<span><i class="strich" style="background:' + FARBE_X + '"></i>x <b id="imu' + i + 'x">—</b></span>' +
+        '<span><i class="strich" style="background:' + FARBE_Y + '"></i>y <b id="imu' + i + 'y">—</b></span>' +
+        '<span><i class="strich" style="background:' + FARBE_Z + '"></i>z <b id="imu' + i + 'z">—</b></span>' +
+      '</div></div>' +
+      '<div class="graph-rahmen"><canvas id="imuGraph' + i + '" style="height:150px"></canvas>' +
+      '<div class="keine-daten" id="imuFehlt' + i + '"><span>Keine Daten – IMU antwortet nicht</span></div></div>' +
+      '</section>';
+  });
+  document.getElementById("imuGraphen").innerHTML = html;
+}
+
+function imuGraphenZeichnen() {
+  const d = zustand.letzte;
+  const datenAlt = d === null || performance.now() - zustand.letzteDatenZeit > KEINE_DATEN_MS;
+  IMU_GRAPHEN.forEach((g, i) => {
+    const feld = g[2];
+    graphZeichnen(document.getElementById("imuGraph" + i), -g[3], g[3], g[4], "", [
+      { wert: (p) => (p[feld] ? p[feld][0] : null), farbe: FARBE_X },
+      { wert: (p) => (p[feld] ? p[feld][1] : null), farbe: FARBE_Y },
+      { wert: (p) => (p[feld] ? p[feld][2] : null), farbe: FARBE_Z },
+    ]);
+    // Live-Zahlen und Hinweis "Keine Daten"
+    const werte = datenAlt ? null : d[feld];
+    const achsen = ["x", "y", "z"];
+    for (let k = 0; k < 3; k++) {
+      document.getElementById("imu" + i + achsen[k]).textContent = werte ? zahlText(werte[k], g[5], g[6]) : "—";
+    }
+    const fehlt = !datenAlt && (werte === null || (d.status & g[7]));
+    document.getElementById("imuFehlt" + i).style.display = fehlt ? "flex" : "none";
+  });
+}
+
+// Wird vom Browser für jedes Bild aufgerufen (ca. 60× pro Sekunde)
+function allesZeichnen() {
+  karteAnzeigen();
+  abwGraphZeichnen();
+  imuGraphenZeichnen();
+  requestAnimationFrame(allesZeichnen);
+}
+
+// Einmal pro Sekunde: Datenrate ausrechnen, Chips, Einmessen und Aufnahmezeit
+function jedeSekunde() {
+  zustand.datenrate = zustand.zaehlerRate;
+  zustand.zaehlerRate = 0;
+  if (performance.now() - zustand.letzteDatenZeit > KEINE_DATEN_MS) {
+    zustand.datenrate = null;
+  }
+  chipsAnzeigen();
+  einmessenAnzeigen();
+  aufnahmeZeitAnzeigen();
+}
+
+
+// =====================================================================
+// f) AUFNAHME ALS CSV
+// =====================================================================
+
+let aufnahme = null;   // null = keine Aufnahme, sonst { start, zeilen: [] }
+const CSV_KOPF = "pc_zeit_ms,millis,ax1,ay1,az1,gx1,gy1,gz1,ax2,ay2,az2,gx2,gy2,gz2,abw_zehntel,status,schritt";
+
+// Merkt sich jede D-Zeile (Rohwerte, so wie sie kamen), wenn die Aufnahme läuft
+function aufnahmeZeile(jetzt, teile) {
+  if (aufnahme !== null) {
+    aufnahme.zeilen.push(Math.round(jetzt - aufnahme.start) + "," + teile.slice(1).join(","));
+  }
+}
+
+function knopfAufnahmeGedrueckt() {
+  if (aufnahme === null) {
+    aufnahme = { start: performance.now(), zeilen: [] };
+    document.getElementById("knopfAufnahme").textContent = "Aufnahme stoppen";
+    document.getElementById("recAnzeige").style.display = "inline-flex";
+  } else {
+    // Datei bauen und herunterladen
+    const text = CSV_KOPF + "\n" + aufnahme.zeilen.join("\n") + "\n";
+    const datei = new Blob([text], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(datei);
+    const stempel = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    link.download = "jointsense_" + stempel + ".csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    ereignisText("Aufnahme gespeichert (" + aufnahme.zeilen.length + " Zeilen)", "#8B95A5");
+    aufnahme = null;
+    document.getElementById("knopfAufnahme").textContent = "Aufnahme (CSV)";
+    document.getElementById("recAnzeige").style.display = "none";
+  }
+}
+
+function aufnahmeZeitAnzeigen() {
+  if (aufnahme !== null) {
+    const s = Math.floor((performance.now() - aufnahme.start) / 1000);
+    document.getElementById("recZeit").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+}
+
+
+// =====================================================================
+// g) DEMO-MODUS: erzeugt Zeilen im gleichen Protokoll wie der Arduino
+// =====================================================================
+// Ablauf in einer Schleife von 60 s:
+//   0–3 s Schritt 1 (still), 3–5 s Warten, 5–15 s Schritt 2, dann Referenz gesetzt,
+//   15–45 s beugen und strecken (jede 2. Streckung zu weit), 45–50 s IMU 2 fällt aus,
+//   50–51 s Lage unbekannt, 51–60 s wieder normal.
+
+const demo = { an: false, timer: null, start: 0, vorher: -1, zuWeit: false, referenz: false };
+
+function demoStarten() {
+  if (port !== null) {
+    trennen();
+  }
+  demo.an = true;
+  demo.start = performance.now();
+  demo.vorher = -1;
+  demo.zuWeit = false;
+  demo.referenz = false;
+  zeileVerarbeiten("E,START");
+  zeileVerarbeiten("E,IMU1_OK");
+  zeileVerarbeiten("E,IMU2_OK");
+  zeileVerarbeiten("G,50,20");
+  demo.timer = setInterval(demoTakt, 20);          // 50 Hz, wie der Arduino
+  verbindungAnzeigen();
+}
+
+function demoStoppen() {
+  demo.an = false;
+  clearInterval(demo.timer);
+  verbindungAnzeigen();
+}
+
+function demoBestaetigung() {
+  ereignisText("Demo: Bestätigung (der Demo-Ablauf läuft von selbst weiter)", "#8B95A5");
+}
+
+function demoTakt() {
+  const sekunden = (performance.now() - demo.start) / 1000;
+  const s = sekunden % 60;                         // Zeit innerhalb der 60-s-Schleife
+  const vorher = s < demo.vorher ? -1 : demo.vorher;   // neue Schleife beginnt
+  const gerade = (a) => vorher < a && s >= a;      // true genau einmal, wenn s die Marke a überschreitet
+  demo.vorher = s;
+
+  // Ereignisse an den Marken
+  if (gerade(0)) { zeileVerarbeiten("E,SCHRITT1_START"); }
+  if (gerade(3)) { zeileVerarbeiten("E,SCHRITT1_FERTIG"); }
+  if (gerade(5)) { zeileVerarbeiten("E,SCHRITT2_START"); }
+  if (gerade(15)) { zeileVerarbeiten("E,REF_GESETZT"); demo.referenz = true; }
+  if (gerade(45)) { zeileVerarbeiten("E,AUSFALL"); demo.zuWeit = false; }
+  if (gerade(50)) { zeileVerarbeiten("E,IMU_WIEDER_DA"); }
+
+  let schritt = 0;
+  if (s < 3) { schritt = 1; } else if (s < 5) { schritt = 2; } else if (s < 15) { schritt = 3; }
+  const ausfall2 = s >= 45 && s < 50;
+  const lage = !(s >= 45 && s < 51);
+
+  // Fortschritt 1× pro Sekunde (P-Zeile)
+  for (let m = 0; m < 15; m++) {
+    if (gerade(m + 0.5) && schritt !== 0) {
+      const p = Math.max(0, (s - 5) / 10);        // 0 bis 1 in Schritt 2
+      const ruhig = schritt === 1 ? Math.min(20, Math.round(s * 7)) : 20;
+      const wert = (ziel, faktor) => (schritt === 3 ? Math.floor(Math.min(1, p * faktor) * ziel * 1.1) : 0);
+      zeileVerarbeiten("P," + ruhig + "," + wert(30, 1.6) + "," + wert(15, 1.2) + "," + wert(45, 1.05) + "," +
+                       (schritt === 3 ? Math.min(100, Math.floor(p * 130)) : 0));
+    }
+  }
+  if (Math.floor(sekunden) !== Math.floor(sekunden - 0.02)) {
+    zeileVerarbeiten("Z," + Math.round(9000 + 1500 * Math.random()));
+  }
+
+  // Bewegung: Arm beugt und streckt alle 4 s, jede 2. Streckung geht 9° zu weit
+  const w = 2 * Math.PI / 4;
+  const periode = Math.floor(sekunden / 4);
+  const zuWeitGehen = schritt === 0 && periode % 2 === 1 ? 9 : 2;
+  const c = Math.cos(w * sekunden);
+  const rauschen = 0.4 * Math.sin(sekunden * 23.1) + 0.25 * Math.sin(sekunden * 37.7);
+  let abw = schritt === 1 || schritt === 2 ? rauschen : -35 * (1 - c) + zuWeitGehen * Math.pow(Math.max(0, c), 3) + rauschen;
+  const oberarm = 12 * Math.sin(2 * Math.PI * sekunden / 7);
+  const unterarm = oberarm - abw;
+  const rad = Math.PI / 180;
+
+  // Vereinfachte Warnung mit Hysterese (nur für die Demo, im echten Gerät rechnet die Firmware)
+  const gueltig = demo.referenz && lage && !ausfall2 && schritt === 0;
+  if (gueltig && abw > 5) { demo.zuWeit = true; }
+  if (!gueltig || abw < 3) { demo.zuWeit = false; }
+
+  const rohAcc = (g) => Math.round(g * ACC_PRO_G);
+  const rohGyro = (gs) => Math.round(gs * GYRO_PRO_GRAD);
+  const imu1 = [rohAcc(Math.sin(oberarm * rad)), rohAcc(0.05 * Math.sin(sekunden * 1.3)), rohAcc(Math.cos(oberarm * rad)),
+                rohGyro(3 * Math.sin(sekunden * 1.1)), rohGyro(12 * (2 * Math.PI / 7) * Math.cos(2 * Math.PI * sekunden / 7)), rohGyro(2 * Math.sin(sekunden * 0.7))];
+  const imu2 = ausfall2 ? ["", "", "", "", "", ""] :
+               [rohAcc(Math.sin(unterarm * rad)), rohAcc(0.08 * Math.sin(sekunden * 0.9 + 1)), rohAcc(Math.cos(unterarm * rad)),
+                rohGyro(8 * Math.sin(sekunden * 1.7)), rohGyro(35 * w * Math.sin(w * sekunden)), rohGyro(5 * Math.sin(sekunden * 0.5))];
+
+  let status = 0;
+  if (ausfall2) { status |= BIT_IMU2_AUSGEFALLEN; }
+  if (demo.referenz) { status |= BIT_REFERENZ; }
+  if (lage) { status |= BIT_LAGE; }
+  if (demo.zuWeit) { status |= BIT_ZU_WEIT | BIT_MOTOR; }
+  if (ausfall2 && (s % 5) < 0.3) { status |= BIT_MOTOR; }   // Fehlermuster
+
+  const abwFeld = gueltig ? String(Math.round(abw * 10)) : "";
+  const millis = Math.round(sekunden * 1000);
+  zeileVerarbeiten("D," + millis + "," + imu1.join(",") + "," + imu2.join(",") + "," + abwFeld + "," + status + "," + schritt);
+}
+
+
+// =====================================================================
+// START: Seite aufbauen, Knöpfe verbinden, Zeichnen beginnen
+// =====================================================================
+
+imuGraphenAufbauen();
+balkenAufbauen();
+document.getElementById("knopfVerbinden").addEventListener("click", knopfVerbindenGedrueckt);
+document.getElementById("knopfEinmessen").addEventListener("click", bestaetigungSenden);
+document.getElementById("knopfAufnahme").addEventListener("click", knopfAufnahmeGedrueckt);
+document.getElementById("knopfPause").addEventListener("click", () => {
+  angehalten = !angehalten;
+  document.getElementById("knopfPause").textContent = angehalten ? "Fortsetzen" : "Anhalten";
+});
+document.getElementById("demoHaken").addEventListener("change", (e) => {
+  if (e.target.checked) { demoStarten(); } else { demoStoppen(); }
+});
+setInterval(jedeSekunde, 1000);
+requestAnimationFrame(allesZeichnen);
+jedeSekunde();
+startVerbindung();
+</script>
+</body>
+</html>

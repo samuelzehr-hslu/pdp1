@@ -36,7 +36,13 @@
 #include "logik.h"
 
 // ---------- Einstellungen (hier dürft ihr Werte ändern) ----------
-const float GRENZWERT_GRAD   = 5.0; // ab so vielen Grad Überstreckung wird gewarnt (QA-03: 0 bis 10)
+// Ausgabe-Modus (REQ-006):
+//   1 = GUI-Modus: 115200 Baud, nur kurze Datenzeilen (G, E, D, P, Z) für tools/gui/jointsense_live.html
+//   0 = Text-Modus wie früher: 9600 Baud, lesbare Texte für den Seriellen Monitor
+// Der Schalter wirkt beim Kompilieren (#if): der nicht gewählte Teil kommt gar nicht ins Programm.
+#define GUI_MODUS 1
+
+const float GRENZWERT_GRAD  = 5.0; // ab so vielen Grad Überstreckung wird gewarnt (QA-03: 0 bis 10)
 const float HYSTERESE_GRAD   = 2.0;  // Motor geht erst wieder aus, wenn 2 Grad unter dem Grenzwert
 const unsigned long ENTPRELL_MS = 80;  // so lange muss die Überstreckung anliegen (README: 50-100 ms)
 const unsigned long MESS_PAUSE_MS = 20; // alle 20 ms messen = 50 Hz (README: 50-100 Hz)
@@ -102,11 +108,26 @@ bool neigungDa = false;              // gibt es schon eine Messung?
 bool stossAktiv = false;             // läuft gerade ein Vibrationsstoss?
 unsigned long stossEndeMs = 0;       // wann endet er?
 
+#if GUI_MODUS
+// Nur im GUI-Modus: Werte für die D-Zeile (REQ-006)
+int16_t rohGelesen[6];               // Rohwerte der zuletzt gelesenen IMU (ax, ay, az, gx, gy, gz)
+int16_t roh1[6];                     // Rohwerte IMU 1 in diesem Zyklus
+int16_t roh2[6];                     // Rohwerte IMU 2 in diesem Zyklus
+bool motorIstAn = false;             // wirklicher Zustand am Motor-Pin (auch Stoss und Fehlermuster)
+bool abwDa = false;                  // gibt es in diesem Zyklus eine gültige Abweichung?
+long abwZehntel = 0;                 // Abweichung in Zehntelgrad (-1800 bis +1800)
+#endif
+
 
 // Läuft einmal beim Start.
 void setup() {
+#if GUI_MODUS
+  Serial.begin(115200);               // GUI-Modus: schnell, damit 50 D-Zeilen pro Sekunde Platz haben
+  Serial.println(F("E,START"));
+#else
   Serial.begin(9600);
-  Wire.begin();                       // I2C starten (SDA = A4, SCL = A5)
+#endif
+  Wire.begin();                      // I2C starten (SDA = A4, SCL = A5)
   Wire.setClock(400000);              // schneller Bus (400 kHz), damit ein Messzyklus kurz bleibt (AK-15)
 
   pinMode(PIN_MOTOR_PWM, OUTPUT);
@@ -119,6 +140,24 @@ void setup() {
   ellbogenZuruecksetzen(ellbogen);    // keine Referenz, keine Achse, keine Lage
 
   // Beide IMUs aufwecken und melden, ob sie antworten
+#if GUI_MODUS
+  if (imuStarten(IMU1_ADRESSE)) {
+    Serial.println(F("E,IMU1_OK"));
+  } else {
+    Serial.println(F("E,IMU1_FEHLER"));
+  }
+  if (imuStarten(IMU2_ADRESSE)) {
+    Serial.println(F("E,IMU2_OK"));
+  } else {
+    Serial.println(F("E,IMU2_FEHLER"));
+  }
+
+  // Grenzwert und Hysterese in Zehntelgrad melden (G-Zeile), gerundet
+  Serial.print(F("G,"));
+  Serial.print((long)(GRENZWERT_GRAD * 10.0f + 0.5f));
+  Serial.print(',');
+  Serial.println((long)(HYSTERESE_GRAD * 10.0f + 0.5f));
+#else
   if (imuStarten(IMU1_ADRESSE)) {
     Serial.println(F("IMU 1 (Oberarm): OK"));
   } else {
@@ -133,6 +172,7 @@ void setup() {
   // Kein automatisches Einmessen mehr (AK-9): Einmessen nur per Taste.
   Serial.println(F("Zum Einmessen: Arm strecken und Taste kurz druecken."));
   Serial.println(F("(oder Enter im Seriellen Monitor)"));
+#endif
 }
 
 
@@ -196,8 +236,16 @@ void loop() {
   ImuMessung messung2;
   bool uebersteuert1 = false;
   bool uebersteuert2 = false;
+#if GUI_MODUS
+  bool ok1 = imuLesen(IMU1_ADRESSE, messung1, uebersteuert1);
+  memcpy(roh1, rohGelesen, sizeof(roh1));      // Rohwerte von IMU 1 für die D-Zeile merken
+  bool ok2 = imuLesen(IMU2_ADRESSE, messung2, uebersteuert2);
+  memcpy(roh2, rohGelesen, sizeof(roh2));      // Rohwerte von IMU 2
+  abwDa = false;                               // Abweichung erst gültig, wenn sie unten berechnet wird
+#else
   bool ok1 = imuLesen(IMU1_ADRESSE, messung1, uebersteuert1);
   bool ok2 = imuLesen(IMU2_ADRESSE, messung2, uebersteuert2);
+#endif
 
   // 2. Ausfall-Zustand nachführen (logik.cpp)
   bool aus1 = imuStatusAktualisieren(imu1, ok1, FEHLER_SCHWELLE);
@@ -267,13 +315,16 @@ void loop() {
     einmessenAbbrechenMelden(grund);
   }
 
-  // Neigung beider IMUs merken (für die Anzeige vor dem Einmessen, AK-1)
+#if !GUI_MODUS
+  // Neigung beider IMUs merken (für die Anzeige vor dem Einmessen, AK-1).
+  // Im GUI-Modus gibt es diese Anzeige nicht (das GUI zeigt die Rohwerte).
   if (ok1 && ok2 && !referenzGueltig && einmessSchritt == SCHRITT_AUS) {
     neigungOberarm = neigungAusBeschleunigung(messung1.ax, messung1.ay, messung1.az);
     neigungUnterarm = neigungAusBeschleunigung(messung2.ax, messung2.ay, messung2.az);
     neigungMs = jetzt;
     neigungDa = true;
   }
+#endif
 
   // 4. Beginnt oder endet der Ausfall gerade?
   if (ausfall && !ausfallVorher) {
@@ -292,7 +343,11 @@ void loop() {
     grenzZustand.zuWeitSeit = 0;
     ellbogenLageVerwerfen(ellbogen);
     feedbackAusgeben(false);
+#if GUI_MODUS
+    Serial.println(F("E,IMU_WIEDER_DA"));
+#else
     Serial.println(F("IMUs wieder da."));
+#endif
   }
   ausfallVorher = ausfall;
 
@@ -302,10 +357,13 @@ void loop() {
     bool musterAn = fehlerMusterMotorAn(fehlerMuster, true, jetzt);
     feedbackAusgeben(motorSollAn(true, false, musterAn));
 
+#if !GUI_MODUS
+    // Nur im Text-Modus: FEHLER jede Sekunde wiederholen (das GUI sieht den Ausfall in den D-Zeilen)
     if (jetzt - letzteFehlerMeldung >= FEHLER_MELDUNG_MS) {
       letzteFehlerMeldung = jetzt;
       fehlerMelden();
     }
+#endif
   } else if (einmessSchritt != SCHRITT_AUS) {
     // Während dem ganzen Einmessen (Schritte UND Warte-Zustand) gibt es keine Überstreckungs-Warnung
     // (AK-16). Der Motor vibriert nur beim Warte-Stoss und bei der Bestätigung.
@@ -326,6 +384,21 @@ void loop() {
     }
     feedbackAusgeben(motorSollAn(false, zuWeit, false));
 
+#if GUI_MODUS
+    // Abweichung für die D-Zeile merken: nur mit Referenz und Lage (sonst bleibt das Feld leer).
+    // Unsinnige Werte (NaN, unendlich) gibt es nicht als Zahl, riesige werden auf +-180 Grad begrenzt.
+    if (referenzGueltig && lageOk && !isnan(abweichung) && !isinf(abweichung)) {
+      float begrenzt = abweichung;
+      if (begrenzt > 180.0f) {
+        begrenzt = 180.0f;
+      }
+      if (begrenzt < -180.0f) {
+        begrenzt = -180.0f;
+      }
+      abwZehntel = (long)(begrenzt * 10.0f + (begrenzt < 0 ? -0.5f : 0.5f));   // auf 0,1 Grad runden
+      abwDa = true;
+    }
+#else
     // 4x pro Sekunde den aktuellen Wert auf den Seriellen Monitor schreiben
     if (referenzGueltig && lageOk && (jetzt - letzteAusgabe >= 250)) {
       letzteAusgabe = jetzt;
@@ -337,12 +410,15 @@ void loop() {
       }
       Serial.println();
     }
+#endif
   }
   // Sonst: Eine Messung ist fehlgeschlagen, aber noch unter der Schwelle (1 oder 2 Mal).
   // Dann wird dieser Zyklus übersprungen: kein Winkel, kein grenzwertPruefen,
   // der Motor bleibt, wie er war (REQ-001, AK-3).
 
-  // 6. Fehlt die Referenz, regelmässig daran erinnern (auch während eines Ausfalls)
+#if !GUI_MODUS
+  // 6. Fehlt die Referenz, regelmässig daran erinnern (auch während eines Ausfalls).
+  //    Nur im Text-Modus: das GUI sieht die fehlende Referenz in den Status-Bits der D-Zeile.
   if (!referenzGueltig && (jetzt - letzteReferenzMeldung >= REFERENZ_MELDUNG_MS)) {
     letzteReferenzMeldung = jetzt;
     Serial.println(F("Keine Referenz - Arm strecken und Taste druecken."));
@@ -355,15 +431,27 @@ void loop() {
       Serial.println(F(" Grad"));
     }
   }
+#endif
 
   // 7. Alle 1000 ms die längste Zykluszeit melden (AK-15)
   if (jetzt - letzteZyklusMeldung >= ZYKLUS_MELDUNG_MS) {
     letzteZyklusMeldung = jetzt;
+#if GUI_MODUS
+    Serial.print(F("Z,"));
+    Serial.println(zyklusMaxUs);
+#else
     Serial.print(F("Zyklus max: "));
     Serial.print(zyklusMaxUs);
     Serial.println(F(" us"));
+#endif
     zyklusMaxUs = 0;
   }
+
+#if GUI_MODUS
+  // 8. Eine D-Zeile pro Messzyklus (REQ-006). Erst hier, nach der Zykluszeit-Messung.
+  bool uebersteuert = (ok1 && uebersteuert1) || (ok2 && uebersteuert2);
+  datenZeileSchreiben(jetzt, ok1, ok2, uebersteuert);
+#endif
 }
 
 
@@ -430,6 +518,16 @@ bool imuLesen(int adresse, ImuMessung &messung, bool &uebersteuert) {
     uebersteuert = true;
   }
 
+#if GUI_MODUS
+  // Rohwerte für die D-Zeile merken (genau so, wie sie aus der IMU kamen)
+  rohGelesen[0] = ax;
+  rohGelesen[1] = ay;
+  rohGelesen[2] = az;
+  rohGelesen[3] = gx;
+  rohGelesen[4] = gy;
+  rohGelesen[5] = gz;
+#endif
+
   // Rohwerte in g und Grad pro Sekunde umrechnen
   messung.ax = (float)ax / ACC_PRO_G;
   messung.ay = (float)ay / ACC_PRO_G;
@@ -461,7 +559,11 @@ void einmessenBeginnen(unsigned long jetzt) {
   grenzZustand.warnungAktiv = false;
   grenzZustand.zuWeitSeit = 0;
   feedbackAusgeben(false);
+#if GUI_MODUS
+  Serial.println(F("E,SCHRITT1_START"));
+#else
   Serial.println(F("Schritt 1: Arm haengen lassen und still halten."));
+#endif
 }
 
 // Schritt 1 ist fertig: Warte-Zustand mit 300 ms Warte-Stoss und GENAU EINER Zeile (AK-6).
@@ -469,7 +571,11 @@ void wartenBeginnen(unsigned long jetzt) {
   einmessSchritt = SCHRITT_WARTEN;
   schrittStartMs = jetzt;                 // ab jetzt zählt die Wartezeit (höchstens 30 s)
   stossStarten(jetzt, STOSS_WARTEN_MS);
+#if GUI_MODUS
+  Serial.println(F("E,SCHRITT1_FERTIG"));
+#else
   Serial.println(F("Schritt 1 fertig. Enter oder Taste fuer Schritt 2 (frei bewegen)."));
+#endif
 }
 
 // Beginnt Schritt 2 (frei bewegen) nach der Bestätigung im Warte-Zustand. Kein Vibrationsstoss (AK-7).
@@ -478,7 +584,11 @@ void bewegungBeginnen(unsigned long jetzt) {
   einmessSchritt = SCHRITT_FREI;
   schrittStartMs = jetzt;                 // ab jetzt zählen die 30 s von Schritt 2 (AK-13)
   naechsteAuswertungMs = jetzt + FORTSCHRITT_MS;
+#if GUI_MODUS
+  Serial.println(F("E,SCHRITT2_START"));
+#else
   Serial.println(F("Schritt 2: Arm frei bewegen (beugen, Oberarm bewegen, Hand drehen)."));
+#endif
 }
 
 // Das Einmessen war erfolgreich (AK-10): Meldung und Bestätigungsvibration.
@@ -487,10 +597,54 @@ void einmessenFertig(unsigned long jetzt) {
   grenzZustand.warnungAktiv = false;
   grenzZustand.zuWeitSeit = 0;
   referenzGueltig = true;
+#if GUI_MODUS
+  Serial.println(F("E,REF_GESETZT"));
+#else
   Serial.println(F("Referenz gesetzt."));
+#endif
   stossStarten(jetzt, STOSS_BESTAETIGUNG_MS);   // Bestätigungsvibration (README: "Bedienung", Punkt 3)
 }
 
+#if GUI_MODUS
+// GUI-Modus: Schritt 1 schreibt die P-Zeile "P,<ruhig_zehntelsek>,0,0,0,0".
+void ruhigMelden() {
+  EinmessFortschritt f;
+  einmessenFortschritt(ellbogen, f);
+  Serial.print(F("P,"));
+  Serial.print(ganzAbgerundet(f.ruhigSekunden * 10.0f));   // z. B. 14 = 1,4 s
+  Serial.println(F(",0,0,0,0"));                           // in Schritt 1 gibt es noch keine Bewegung
+}
+
+// GUI-Modus: Schritt 2 schreibt die P-Zeile "P,<ruhig>,<beugung>,<oberarm>,<hand>,<achse_prozent>".
+void fortschrittMelden() {
+  EinmessFortschritt f;
+  einmessenFortschritt(ellbogen, f);
+  Serial.print(F("P,"));
+  Serial.print(ganzAbgerundet(f.ruhigSekunden * 10.0f));
+  Serial.print(',');
+  Serial.print(ganzAbgerundet(f.beugungGrad));
+  Serial.print(',');
+  Serial.print(ganzAbgerundet(f.oberarmGrad));
+  Serial.print(',');
+  Serial.print(ganzAbgerundet(f.handGrad));
+  Serial.print(',');
+  uint8_t achse = f.achseProzent;
+  if (achse > 100) {
+    achse = 100;                          // Sicherheit: nie mehr als 100 %
+  }
+  Serial.println(achse);
+}
+
+// Macht aus einer Kommazahl eine ganze Zahl (abgerundet), wie wertMelden im Text-Modus.
+// Unsinnige Werte (negativ, NaN, riesig) werden zu 0.
+long ganzAbgerundet(float wert) {
+  long ganz = 0;
+  if (wert > 0.0f && wert < 1000.0f) {    // (NaN ist weder > 0 noch < 1000, gibt also 0)
+    ganz = (long)wert;                    // (long) schneidet die Nachkommastellen ab = abrunden
+  }
+  return ganz;
+}
+#else
 // Schreibt in Schritt 1 die Zeile "Ruhig: x.x s von 2.0 s" (AK-4).
 void ruhigMelden() {
   EinmessFortschritt f;
@@ -532,6 +686,7 @@ void wertMelden(const __FlashStringHelper *name, float wert, int ziel) {
     Serial.print(F(" OK"));
   }
 }
+#endif
 
 // Bricht das Einmessen ab (IMU, Wartezeit, 30 s um) und schreibt den Grund.
 // Die bisherige Referenz und Achse bleiben, es gibt keine Bestätigungsvibration (AK-15).
@@ -551,6 +706,25 @@ void einmessenBeenden(uint8_t grund) {
   einmessenAbbruchMelden(grund);
 }
 
+#if GUI_MODUS
+// GUI-Modus: schreibt die Zeile "E,EINMESS_ABBRUCH_<GRUND>".
+void einmessenAbbruchMelden(uint8_t grund) {
+  Serial.print(F("E,EINMESS_ABBRUCH_"));
+  if (grund == EINMESSEN_GRUND_BEUGUNG) {
+    Serial.println(F("BEUGUNG"));
+  } else if (grund == EINMESSEN_GRUND_RUHIG) {
+    Serial.println(F("RUHIG"));
+  } else if (grund == EINMESSEN_GRUND_OBERARM) {
+    Serial.println(F("OBERARM"));
+  } else if (grund == EINMESSEN_GRUND_HAND) {
+    Serial.println(F("HAND"));
+  } else if (grund == EINMESSEN_GRUND_BESTAETIGUNG) {
+    Serial.println(F("BESTAETIGUNG"));
+  } else {
+    Serial.println(F("IMU"));
+  }
+}
+#else
 // Schreibt die Zeile "Einmessen abgebrochen - Grund: ..." auf den Seriellen Monitor.
 void einmessenAbbruchMelden(uint8_t grund) {
   Serial.print(F("Einmessen abgebrochen - Grund: "));
@@ -568,6 +742,7 @@ void einmessenAbbruchMelden(uint8_t grund) {
     Serial.println(F("IMU"));
   }
 }
+#endif
 
 
 // =====================================================================
@@ -585,6 +760,9 @@ void feedbackAusgeben(bool motorAn) {
   } else {
     analogWrite(PIN_MOTOR_PWM, 0);
   }
+#if GUI_MODUS
+  motorIstAn = motorAn;                   // für Bit 5 der D-Zeile
+#endif
 }
 
 // Startet einen Vibrationsstoss von dauerMs Millisekunden (ohne zu warten).
@@ -592,6 +770,9 @@ void stossStarten(unsigned long jetzt, unsigned long dauerMs) {
   stossAktiv = true;
   stossEndeMs = jetzt + dauerMs;
   analogWrite(PIN_MOTOR_PWM, MOTOR_STAERKE);
+#if GUI_MODUS
+  motorIstAn = true;
+#endif
 }
 
 // Beendet den Vibrationsstoss, wenn seine Zeit um ist.
@@ -599,6 +780,9 @@ void stossPruefen(unsigned long jetzt) {
   if (stossAktiv && (long)(jetzt - stossEndeMs) >= 0) {
     stossAktiv = false;
     analogWrite(PIN_MOTOR_PWM, 0);
+#if GUI_MODUS
+    motorIstAn = false;
+#endif
   }
 }
 
@@ -615,6 +799,58 @@ void zahlSchreiben(float x) {
   Serial.print(zehntel % 10);
 }
 
+#if GUI_MODUS
+// GUI-Modus: meldet den Beginn eines Ausfalls einmal mit "E,AUSFALL".
+// Welche IMU ausgefallen ist, steht in den Status-Bits der D-Zeile.
+void fehlerMelden() {
+  Serial.println(F("E,AUSFALL"));
+}
+
+// Schreibt ein Komma und danach die Zahl (ein Feld der D-Zeile).
+void feldSchreiben(long wert) {
+  Serial.print(',');
+  Serial.print(wert);
+}
+
+// Schreibt die 6 Rohwerte einer IMU als Felder. Hat die IMU nicht geantwortet: 6 leere Felder.
+void rohFelderSchreiben(bool ok, const int16_t roh[6]) {
+  for (uint8_t i = 0; i < 6; i++) {
+    if (ok) {
+      feldSchreiben(roh[i]);
+    } else {
+      Serial.print(',');                  // leeres Feld
+    }
+  }
+}
+
+// Schreibt die D-Zeile (REQ-006), einmal pro Messzyklus:
+// D,<millis>,<6 Rohwerte IMU 1>,<6 Rohwerte IMU 2>,<abw_zehntel>,<status>,<schritt>
+void datenZeileSchreiben(unsigned long jetzt, bool ok1, bool ok2, bool uebersteuert) {
+  // Status-Bits zusammenbauen (Bit gesetzt = trifft zu)
+  uint8_t status = 0;
+  if (imu1.ausgefallen)          status |= 1;    // Bit 0: IMU 1 ausgefallen
+  if (imu2.ausgefallen)          status |= 2;    // Bit 1: IMU 2 ausgefallen
+  if (referenzGueltig)           status |= 4;    // Bit 2: Referenz gültig
+  if (ellbogen.lageBekannt)      status |= 8;    // Bit 3: Lage bekannt
+  if (grenzZustand.warnungAktiv) status |= 16;   // Bit 4: zu weit (Ergebnis von grenzwertPruefen)
+  if (motorIstAn)                status |= 32;   // Bit 5: Motor an
+  if (uebersteuert)              status |= 64;   // Bit 6: Gyro übersteuert
+
+  Serial.print('D');
+  Serial.print(',');
+  Serial.print(jetzt);                    // millis() ohne Vorzeichen (0 bis 4294967295)
+  rohFelderSchreiben(ok1, roh1);
+  rohFelderSchreiben(ok2, roh2);
+  if (abwDa) {
+    feldSchreiben(abwZehntel);
+  } else {
+    Serial.print(',');                    // leeres Feld: keine gültige Abweichung
+  }
+  feldSchreiben(status);
+  feldSchreiben(einmessSchritt);
+  Serial.print('\n');
+}
+#else
 // Schreibt eine FEHLER-Zeile mit dem Namen jeder ausgefallenen IMU auf den Seriellen Monitor.
 void fehlerMelden() {
   Serial.print(F("FEHLER: "));
@@ -626,6 +862,7 @@ void fehlerMelden() {
   }
   Serial.println(F("ausgefallen"));
 }
+#endif
 
 // Gibt true zurück, wenn eine Bestätigung gekommen ist (REQ-004, AK-1 und AK-2):
 //   (a) die Taste wurde gerade eben neu gedrückt (entprellt in logik.cpp, tasteNeuGedrueckt), oder
