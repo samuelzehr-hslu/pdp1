@@ -39,12 +39,12 @@ void abbruchMitAlterReferenz(const char *kopf, double grad, int art, bool pflich
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(zweiEinmessungen(), einbauStandard(), fehlerNurRauschen(), 91);
-  bool ok1 = einmessenLaufen(sim, z, 30.0f);      // t = 0 bis 7,5 (Hand dreht normal)
+  bool ok1 = einmessenLaufen(sim, z);      // t = 0 bis 7,5 (Hand dreht normal)
   laufe(sim, z, 4.0, 0.0);                        // t = 7,5 bis 11,5
   phase3Grad() = grad;
   phase3Art() = art;
-  bool ok2 = einmessenLaufen(sim, z, 30.0f);      // t = 11,5 bis 19
-  bool nochmal = ok2 ? false : einmessenAbschliessen(z, 30.0f);
+  bool ok2 = einmessenLaufen(sim, z);      // t = 11,5 bis 19
+  bool nochmal = ok2 ? false : einmessenAbschliessen(z);
   double refFlex = ok2 ? -20.0 : 0.0;             // bei Abbruch gilt die alte Referenz (0 Grad)
   Messreihe halten = laufe(sim, z, 6.0, 0.0, refFlex);    // t = 19 bis 25
   Messreihe bewegt = laufe(sim, z, 8.0, 0.0, refFlex);    // t = 25 bis 33
@@ -71,7 +71,7 @@ void abbruchOhneReferenz(const char *kopf, double grad, int art) {
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(bew, einbauStandard(), fehlerNurRauschen(), 92);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   Messreihe m = laufe(sim, z, 5.0, 0.0);
   char text[240];
   std::snprintf(text, sizeof(text), "%s: Einmessen wird abgebrochen (liefert false)", kopf);
@@ -94,7 +94,7 @@ void handKlappt(double grad) {
     ArmSim sim(mitEinmessen(start, 70.0, 2, 0.0, 0.0, danach), einbauNr(k), fehlerNr(k), 100 + k);
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
-    bool ok = einmessenLaufen(sim, z, 30.0f);
+    bool ok = einmessenLaufen(sim, z);
     if (!ok) { merke(nichtOk, k); continue; }
     Messreihe m = laufe(sim, z, 14.0, 0.0);
     if (m.maxFehler > schlimmster) schlimmster = m.maxFehler;
@@ -103,7 +103,8 @@ void handKlappt(double grad) {
   char text[240];
   std::printf("          Hand %.0f Grad: grösster Fehler %.3f Grad\n", grad, schlimmster);
   std::snprintf(text, sizeof(text), "AK-6/AK-7e: Hand %.0f Grad (hin und zurück): Einmessen klappt (nicht ok bei Einbau: %s)", grad, nichtOk.c_str());
-  pruefe(nichtOk.empty(), text);
+  if (grad < 50.0) ersetztDurchReq005(nichtOk.empty(), text);   // genau 45 Grad als Pflicht-Erfolg: ersetzt (REQ-005 AK-11 verlangt 60 Grad)
+  else pruefe(nichtOk.empty(), text);
   std::snprintf(text, sizeof(text), "AK-6: nach Hand %.0f Grad stimmt der Winkel auf 2,5 Grad und ist immer bekannt (Fehler bei Einbau: %s)", grad, schlecht.c_str());
   pruefe(schlecht.empty(), text);
 }

@@ -45,7 +45,7 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 - Abtastrate: 50–100 Hz (Anforderung: ≥ 25 Hz)
 - Sensorfusion: Komplementärfilter bzw. integrierte Fusion (BNO085). Beschleunigung **und** Gyroskop, damit Drehungen (Unterarm, Schulter, Schwenken) den Ellbogenwinkel nicht verfälschen (REQ-002)
 - Entprellung: 50–100 ms gegen Fehlalarme, plus kleine Hysterese gegen Flattern an der Grenze
-- Einmessen: Referenz = Mittelwert über eine kurze Haltezeit (2 s still), danach Arm genau 2 Mal beugen und strecken und dabei den Oberarm in einem kleinen Kreis mitbewegen (4 s), damit das Gerät die Scharnier-Achse des Ellbogens findet, danach Hand einmal drehen (1,5 s), damit es die Knochenachse des Unterarms misst. Plausibilitätsprüfung (Arm ruhig? genug Bewegung? Achsen eindeutig?), im Zweifel Abbruch statt Raten
+- Einmessen (REQ-005): Referenz = Mittelwert über 2 s ruhige Zeit am Stück (Wackeln zählt neu, kein Abbruch). Danach Arm frei bewegen: beugen (Scharnier-Achse), Oberarm in zwei Richtungen bewegen (Achse der Oberarm-IMU), Hand drehen (Knochenachse des Unterarms), in beliebiger Reihenfolge. Das Gerät sammelt, bis alle Werte genügen und die Achsen eindeutig sind, und zeigt den Fortschritt im Seriellen Monitor. Jeder Teil höchstens 30 s, im Zweifel weiter sammeln oder Abbruch statt Raten
 - Drift: Das Gerät korrigiert die Gyro-Drift im Betrieb selbst (Ruhe erkennen, Gelenkachse als Zusatzbedingung, Seel et al., 2014). Die Referenz (0°) wird dabei nie automatisch verändert. Ziel: 10 min ± 2° ohne Neu-Einmessen
 
 ### Setup
@@ -61,7 +61,7 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 
 1. **Anlegen:** Sleeve über den Ellbogen ziehen, Markierung auf Gelenkmitte ausrichten.
 2. **Einschalten:** Taste lang drücken, Status-LED zeigt «aktiv».
-3. **Einmessen:** Im Stehen den Arm entspannt gestreckt locker nach unten hängen lassen, Taste kurz drücken und ca. 2 s still halten. Ein kurzer Vibrationsstoss meldet «jetzt bewegen»: Arm genau 2 Mal beugen und strecken (ca. 4 s) und dabei den Oberarm in kleinen Kreisen mitbewegen. Zwei kurze Stösse melden «jetzt Hand drehen»: Hand einmal hin und zurück drehen (ca. 1,5 s, Arm sonst ruhig). Danach Bestätigungsvibration. Nach dem Einschalten muss einmal eingemessen werden (kein automatisches Einmessen).
+3. **Einmessen:** Im Stehen den Arm entspannt gestreckt locker nach unten hängen lassen, Taste kurz drücken und still halten, bis das Gerät 2 s Ruhe gemessen hat (Vibrationsstoss 300 ms). Taste nochmals drücken, dann den Arm frei bewegen, **eine Bewegung nach der anderen** (Reihenfolge egal): ein paar Mal beugen und strecken, den Oberarm in einem kleinen Kreis bewegen, die Hand hin und zurück drehen (dabei Oberarm ruhig halten). Alles gleichzeitig zählt nicht. Der Serielle Monitor zeigt den Fortschritt (`Beugung 41/30 OK  Oberarm 9/15  Hand 22/45  Achse 60%`). Ist alles OK: Bestätigungsvibration. Nach dem Einschalten muss einmal eingemessen werden (kein automatisches Einmessen).
 4. **Training:** Solange der Winkel im zulässigen Bereich bleibt, passiert nichts.
 5. **Überstreckung:** Motor vibriert, bis das Gelenk zurückgeführt wird.
 6. **Beenden:** Taste lang drücken; Elektronikmodul zum Waschen entnehmen.
@@ -71,7 +71,7 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 | ID | Anforderung | Zielwert |
 |---|---|---|
 | QA-01 | Messbereich / Abtastrate / Auflösung | −100° (Beugung) bis +15° (Überstreckung) / ≥ 25 Hz / ≤ 1° |
-| QA-02 | Einmessen der Referenz | Messzeit ≤ 8 s (2 s still, 4 s Beuge-Bewegung, 1,5 s Hand drehen), dazu die Wartezeiten der Person zwischen den Schritten (je höchstens 30 s, REQ-004), Wiederholgenauigkeit ± 1,5° |
+| QA-02 | Einmessen der Referenz | 2 s ruhig (höchstens 30 s Zeit), dann frei bewegen (höchstens 30 s), dazu eine Wartezeit auf die Bestätigung (höchstens 30 s) (REQ-005), Wiederholgenauigkeit ± 1,5° |
 | QA-03 | Grenzwert-Einstellbereich | 0° bis +10°, Schrittweite ≤ 2° |
 | QA-04 | Erkennung Grenzwertüberschreitung | Toleranz ≤ ± 2°, Erkennungsrate ≥ 95 % |
 | QA-05 | Feedback-Latenz | ≤ 100 ms, Zuverlässigkeit ≥ 98 % |

@@ -34,9 +34,9 @@ int lauf(double delta, double richtungGrad, double refFlex, int einbauNummer, un
   ArmSim sim(mitEinmessen(start, 70.0, 2, 0.0, 0.0, danach), einbauNr(einbauNummer), fehlerNr(einbauNummer), samen);
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   if (!ok) {
-    bool nochmal = einmessenAbschliessen(z, 30.0f);
+    bool nochmal = einmessenAbschliessen(z);
     float a = 0.0f;
     if (nochmal || ellbogenAbweichung(z, a)) return 2;   // nach Abbruch ohne Referenz darf nichts gemeldet werden
     return 0;

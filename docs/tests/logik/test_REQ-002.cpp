@@ -1,5 +1,8 @@
 // test_REQ-002.cpp
 // Tests zu REQ-002 (Winkelmessung unabhängig von Drehung): AK-1 bis AK-9, AK-13, AK-14 und Fuzz.
+// Stand REQ-005: Das Einmessen läuft jetzt über den neuen Ablauf (einmessenLaufen in sim_ellbogen.h: Schritt 1 still, Schritt 2 frei
+// bewegen). Die alten Tests zu AK-6/AK-7 (Phasen, minBeugungGrad) sind dort, wo sie den alten Ablauf prüften, durch REQ-005
+// ersetzt (siehe test_REQ-005.cpp); die Winkel-Kriterien AK-1 bis AK-5, AK-8, AK-10 bis AK-16 gelten weiter.
 // Stand Runde 3 (Team-Entscheidung): Einmess-Bewegung = genau 2 Mal beugen (je mindestens 30 Grad Spannweite) und dabei der
 // Oberarm in einem kleinen Kreis (20 Grad, verlangt sind mindestens 15), eingemessen wird im Hängen mit lockerem Arm (siehe
 // mitEinmessen in sim_ellbogen.h). AK-1 bis AK-4 gelten NACH dem Einmessen in jeder Armlage (hängend, vorn, oben, seitlich),
@@ -23,6 +26,7 @@
 #include "test_hilfe.h"
 #include "logik.h"
 #include "sim_ellbogen.h"
+#include "frei_hilfe.h"
 
 // ======================================================================
 // Gemeinsame Bausteine
@@ -54,7 +58,7 @@ void folgeMessen(const double *ziele, int n, const SensorFehler &fe, unsigned lo
   ArmSim sim(bew, einbauStandard(), fe, samen);
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  einmessenLaufen(sim, z, 30.0f);
+  einmessenLaufen(sim, z);
   mittel[0] = 0.0;
   for (int j = 1; j < n; j++) {
     Messreihe a = laufe(sim, z, 1.5, 0.0);   // bewegen und einschwingen
@@ -117,7 +121,7 @@ void drehungPruefen(int art, double flexZiel, const Lage &lageRef, const char *k
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(bew, einbauStandard(), fehlerNurRauschen(), samenZaehler);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   laufe(sim, z, 2.5, 0.0);                          // Ellbogen und Arm bewegen, einschwingen
   Messreihe vor = laufe(sim, z, 1.0, 0.0);          // Grundwert
   Messreihe dreh = laufe(sim, z, 8.0, vor.mittel);  // Drehung
@@ -189,7 +193,7 @@ void lagenPruefen(double flexZiel) {
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(bew, einbauStandard(), fehlerNurRauschen(), 12);   // mit Sensor-Rauschen (Gyro 0,1 Grad/s, 0,01 g)
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   int unbek = 0;
   double mittel[6];
   for (int k = 0; k < 6; k++) {
@@ -239,7 +243,7 @@ void einbauPruefen(int achse) {
                  static_cast<unsigned long long>(100 + i * 5 + j));
       EllbogenZustand z;
       ellbogenZuruecksetzen(z);
-      if (!einmessenLaufen(sim, z, 30.0f)) {
+      if (!einmessenLaufen(sim, z)) {
         nichtEingemessen++;
         continue;
       }
@@ -273,7 +277,7 @@ void beliebigerEinbau() {
     ArmSim sim(standardBewegung(), e, fehlerNurRauschen(), static_cast<unsigned long long>(200 + i));   // mit Sensor-Rauschen
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
-    if (!einmessenLaufen(sim, z, 30.0f)) {
+    if (!einmessenLaufen(sim, z)) {
       nichtEingemessen++;
       continue;
     }
@@ -304,7 +308,7 @@ double erkennungsrate(double ziel, bool erwarteUeber) {
     ArmSim sim(bew, einbauStandard(), fehlerNurRauschen(), static_cast<unsigned long long>(300 + i));
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
-    if (!einmessenLaufen(sim, z, 30.0f)) {
+    if (!einmessenLaufen(sim, z)) {
       gesamt += 75;
       continue;
     }
@@ -376,22 +380,22 @@ void testAK6() {
   for (int i = 0; i < 200; i++) {
     if (zyklusUndLesen(sim, z, a)) bekanntWaehrend++;
   }
-  einmessenDrehungStart(z);   // Phase 3: Hand drehen (1500 ms)
+  // (Phase 3 entfällt mit REQ-005)
   for (int i = 0; i < 75; i++) {
     if (zyklusUndLesen(sim, z, a)) bekanntWaehrend++;
   }
-  bool ok = einmessenAbschliessen(z, 30.0f);
+  bool ok = einmessenAbschliessen(z);
   pruefe(bekanntWaehrend == 0, "AK-6: Beim ersten Einmessen gibt es vor dem Abschluss noch keine Abweichung (keine Referenz)");
-  pruefe(ok, "AK-6: Einmessen mit 2 s still + 4 s Beugen/Strecken (70 Grad, 2 Mal) + 1,5 s Hand drehen liefert true");
+  ersetztDurchReq005(ok, "AK-6: Einmessen mit 2 s still + 4 s Beugen/Strecken (70 Grad, 2 Mal) + 1,5 s Hand drehen liefert true");
   float danach = 99.0f;
   bool bekannt = ellbogenAbweichung(z, danach);
-  pruefe(bekannt, "AK-6: Nach erfolgreichem Einmessen ist die Abweichung bekannt (Lage bekannt)");
-  pruefeNahe(danach, 0.0, 2.5, "AK-6: Referenz = Mittelwert der Ruhephase: gestreckter Arm zeigt 0 Grad");
+  ersetztDurchReq005(bekannt, "AK-6: Nach erfolgreichem Einmessen ist die Abweichung bekannt (Lage bekannt)");
+  ersetztDurchReq005(std::fabs(danach) <= 2.5, "AK-6: Referenz = Mittelwert der Ruhephase: gestreckter Arm zeigt 0 Grad");
 
   // Beugung zeigt negative Werte (Vorzeichen: negativ = Beugung).
   Messreihe m = laufe(sim, z, 3.0, 0.0);
-  pruefe(m.unbekannt == 0, "AK-6: nach dem Einmessen ist der Winkel in der folgenden Bewegung immer bekannt");
-  pruefe(m.minAbw < -50.0 && m.maxAbw < 5.0, "AK-6: Beugung gibt negative Werte, keine Überstreckung beim normalen Beugen");
+  ersetztDurchReq005(m.unbekannt == 0, "AK-6: nach dem Einmessen ist der Winkel in der folgenden Bewegung immer bekannt");
+  ersetztDurchReq005(m.minAbw < -50.0 && m.maxAbw < 5.0, "AK-6: Beugung gibt negative Werte, keine Überstreckung beim normalen Beugen");
 
   // Zweites Einmessen bei -20 Grad: neue Referenz = Mittelwert der Ruhephase (-20 Grad).
   // Zeitplan: 0-7,5 s erstes Einmessen, 7,5-9,5 s Arm weich auf -20 Grad, 9,5-11,5 s halten,
@@ -410,9 +414,9 @@ void testAK6() {
   EllbogenZustand z2;
   ellbogenZuruecksetzen(z2);
   ArmSim sim2(bew2, einbauStandard(), fehlerKeine(), 62);
-  bool ok1 = einmessenLaufen(sim2, z2, 30.0f);      // t = 0 bis 7,5
+  bool ok1 = einmessenLaufen(sim2, z2);      // t = 0 bis 7,5
   laufe(sim2, z2, 4.0, 0.0);                        // t = 7,5 bis 11,5
-  bool ok2 = einmessenLaufen(sim2, z2, 30.0f);      // t = 11,5 bis 19, Arm bei -20 Grad
+  bool ok2 = einmessenLaufen(sim2, z2);      // t = 11,5 bis 19, Arm bei -20 Grad
   laufe(sim2, z2, 2.0, 0.0);                        // t = 19 bis 21
   Messreihe still = laufe(sim2, z2, 1.0, 0.0, -20.0);   // t = 21 bis 22, Bewegung auf -50 beginnt
   laufe(sim2, z2, 1.5, 0.0, -20.0);                 // einschwingen
@@ -464,7 +468,7 @@ void abbruchMitAlterReferenz(const char *kopf, double amplitude, double pronRate
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(fehlerZeitplan(amplitude, pronRate, yawRate), einbauStandard(), fehlerKeine(), 71);
-  bool ok1 = einmessenLaufen(sim, z, 30.0f);   // t = 0 bis 7,5
+  bool ok1 = einmessenLaufen(sim, z);   // t = 0 bis 7,5
   laufe(sim, z, 4.0, 0.0);                     // t = 7,5 bis 11,5
   bool ok2;
   if (durchAbbrechen) {
@@ -472,13 +476,13 @@ void abbruchMitAlterReferenz(const char *kopf, double amplitude, double pronRate
     zyklenOhne(sim, z, 100);
     einmessenBewegungStart(z);
     zyklenOhne(sim, z, 100);
-    einmessenAbbrechen(z);
-    ok2 = einmessenAbschliessen(z, 30.0f);     // nach dem Abbrechen darf nichts mehr abgeschlossen werden
+    einmessenAbbrechen(z, EINMESSEN_GRUND_IMU);
+    ok2 = einmessenAbschliessen(z);     // nach dem Abbrechen darf nichts mehr abgeschlossen werden
     zyklenOhne(sim, z, 175);                   // bis t = 19
   } else {
-    ok2 = einmessenLaufen(sim, z, 30.0f);      // t = 11,5 bis 19
+    ok2 = einmessenLaufen(sim, z);      // t = 11,5 bis 19
   }
-  bool nochmal = einmessenAbschliessen(z, 30.0f);    // nach einem Abbruch nie true
+  bool nochmal = einmessenAbschliessen(z);    // nach einem Abbruch nie true
   Messreihe beruhigung = laufe(sim, z, 6.0, 0.0);    // t = 19 bis 25
   Messreihe halten = laufe(sim, z, 4.0, 0.0);        // t = 25 bis 29
   Messreihe bewegt = laufe(sim, z, 8.0, 0.0);        // t = 29 bis 37
@@ -505,7 +509,7 @@ void abbruchOhneReferenz(const char *kopf, double amplitude, double pronRate, do
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(bew, einbauStandard(), fehlerKeine(), 72);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   Messreihe m = laufe(sim, z, 6.0, 0.0);
   char text[220];
   std::snprintf(text, sizeof(text), "%s: das Einmessen liefert false (Abbruch)", kopf);
@@ -520,7 +524,7 @@ void einmessenGelingt(const char *kopf, const SensorFehler &fe, double pronRate,
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(bew, einbauStandard(), fe, 73);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   pruefe(ok, kopf);
 }
 
@@ -537,7 +541,7 @@ void testAK7() {
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
     ArmSim sim(mitEinmessen(poseHaengend(), 20.0, 4, 0.0, 0.0, danachHalten), einbauStandard(), fehlerKeine(), 76);
-    bool ok = einmessenLaufen(sim, z, 30.0f);
+    bool ok = einmessenLaufen(sim, z);
     pruefe(!ok, "AK-7a: 4 Mal 20 Grad hin und zurück (Weg 160, Spannweite 20): Abbruch, der Weg zählt nicht");
   }
   {
@@ -545,7 +549,7 @@ void testAK7() {
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
     ArmSim sim(mitEinmessen(poseHaengend(), 40.0, 2, 0.0, 0.0, danachHalten), einbauStandard(), fehlerKeine(), 77);
-    pruefe(einmessenLaufen(sim, z, 30.0f), "AK-7a: Spannweite 40 Grad (über 30): Einmessen klappt");
+    pruefe(einmessenLaufen(sim, z), "AK-7a: Spannweite 40 Grad (über 30): Einmessen klappt");
   }
   // b) Arm in Phase 1 nicht ruhig (Drehgeschwindigkeit weit über 10 Grad/s).
   abbruchOhneReferenz("AK-7b: nur der Unterarm dreht sich in Phase 1 (40 Grad/s), ohne alte Referenz", 70.0, 40.0, 0.0);
@@ -562,7 +566,7 @@ void testAK7() {
     zyklenOhne(sim, z, 100);
     einmessenBewegungStart(z);
     zyklenOhne(sim, z, 100);
-    einmessenAbbrechen(z);
+    einmessenAbbrechen(z, EINMESSEN_GRUND_IMU);
     Messreihe m = laufe(sim, z, 5.0, 0.0);
     pruefe(m.unbekannt == m.zyklen, "AK-7c: einmessenAbbrechen ohne frühere Referenz: es bleibt bei 'keine Abweichung'");
   }
@@ -572,19 +576,7 @@ void testAK7() {
   einmessenGelingt("AK-7 Gegenprobe: leichte Bewegung 3 Grad/s plus Offset (unter 10 Grad/s): Einmessen klappt",
                    fehlerMitOffset(0), 3.0, 3.0);
 
-  // Parameter minBeugungGrad: gleiche Bewegung (2 Mal 50 Grad hin und zurück), einmal 30 (reicht), einmal 120 (reicht nicht).
-  {
-    EllbogenZustand z1;
-    ellbogenZuruecksetzen(z1);
-    ArmSim sim1(mitEinmessen(poseHaengend(), 50.0, 2, 0.0, 0.0, danachHalten), einbauStandard(), fehlerKeine(), 75);
-    bool okKlein = einmessenLaufen(sim1, z1, 30.0f);
-    EllbogenZustand z2;
-    ellbogenZuruecksetzen(z2);
-    ArmSim sim2(mitEinmessen(poseHaengend(), 50.0, 2, 0.0, 0.0, danachHalten), einbauStandard(), fehlerKeine(), 75);
-    bool okGross = einmessenLaufen(sim2, z2, 120.0f);
-    pruefe(okKlein, "AK-7: Beugung 50 Grad bei minBeugungGrad = 30: Einmessen klappt");
-    pruefe(!okGross, "AK-7: Beugung 50 Grad bei minBeugungGrad = 120: Einmessen wird abgebrochen (Parameter wirkt)");
-  }
+  // Der Parameter minBeugungGrad entfällt mit REQ-005 (Grenze 30 Grad fest). Test ersetzt durch REQ-005 AK-8/AK-13 (test_REQ-005.cpp).
 }
 
 // ======================================================================
@@ -606,7 +598,7 @@ void testAK8() {
   int geklappt = 0;
   int unbek = 0;
   for (int k = 0; k < 10; k++) {
-    if (einmessenLaufen(sim, z, 30.0f)) geklappt++;
+    if (einmessenLaufen(sim, z)) geklappt++;
     Messreihe m = laufe(sim, z, 2.0, 0.0);
     werte[k] = m.mittel;
     unbek += m.unbekannt;
@@ -664,7 +656,7 @@ void testAK9() {
   EllbogenZustand z3;
   ellbogenZuruecksetzen(z3);
   ArmSim sim3(standardBewegung(), einbauStandard(), fehlerKeine(), 93);
-  bool ok = einmessenLaufen(sim3, z3, 30.0f);
+  bool ok = einmessenLaufen(sim3, z3);
   pruefe(ok && ellbogenAbweichung(z3, a), "AK-9: nach erfolgreichem Einmessen gibt es eine Abweichung");
   ellbogenZuruecksetzen(z3);
   pruefe(!ellbogenAbweichung(z3, a), "AK-9: ellbogenZuruecksetzen löscht Referenz, Achse und Lage (wie nach dem Einschalten)");
@@ -701,7 +693,7 @@ void ausfallPruefen(bool weiterBewegen, const char *kopf) {
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
   ArmSim sim(ausfallZeitplan(weiterBewegen), einbauStandard(), fehlerNurRauschen(), 131);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   Messreihe vorher = laufe(sim, z, 6.0, 0.0);     // t = 6 bis 12
   ellbogenLageVerwerfen(z);                       // Ausfall endet (REQ-001)
   float a = 55.0f;
@@ -789,7 +781,7 @@ void testAK14() {
       zyklenOhne(sim, z, 50);
     }
     if (art == 2) {
-      einmessenLaufen(sim, z, 30.0f);
+      einmessenLaufen(sim, z);
       laufe(sim, z, 2.0, 0.0);
     }
     ImuMessung o = ImuMessung();
@@ -865,7 +857,15 @@ void testAK14() {
 
   // Verhalten: zwei gleiche Zustände, einer bekommt dazwischen ungültige Zyklen. Danach müssen beide gleich sein.
   {
-    ArmSim sim(standardBewegung(), einbauStandard(), fehlerNurRauschen(), 143);
+    // Einmess-Vorspann nach REQ-005 AK-11: Schritt 1 (2 s still), dann nacheinander 2 Mal beugen (50 Grad),
+    // Oberarm-Kreis (25 Grad), Hand 60 Grad; jede Sekunde wird ausgewertet (bis 30 s).
+    Skript sk;
+    sk.basis = grundLage(0);
+    planTeil(sk.plan, T_BEUGEN, 50.0, 0.7, 2.0);
+    planTeil(sk.plan, T_KREIS, 25.0, 0.7, 1.0);
+    planTeil(sk.plan, T_HAND, 60.0, 0.7, 1.0);
+    sk.pruefAb = 1e9;
+    ArmSim sim(skriptBewegung(sk), einbauStandard(), fehlerNurRauschen(), 143);
     EllbogenZustand zA;
     EllbogenZustand zB;
     ellbogenZuruecksetzen(zA);
@@ -876,18 +876,15 @@ void testAK14() {
     int ungueltigAngenommen = 0;
     bool okA = false;
     bool okB = false;
-    for (int k = 0; k < 900; k++) {
+    for (int k = 0; k < 1700; k++) {
       if (k == 100) {
+        *sk.t2 = sim.t;
         einmessenBewegungStart(zA);
         einmessenBewegungStart(zB);
       }
-      if (k == 300) {
-        einmessenDrehungStart(zA);
-        einmessenDrehungStart(zB);
-      }
-      if (k == 375) {
-        okA = einmessenAbschliessen(zA, 30.0f);
-        okB = einmessenAbschliessen(zB, 30.0f);
+      if (k > 100 && (k - 100) % 50 == 0) {   // jede Sekunde in Schritt 2 auswerten, bis es klappt
+        if (!okA) okA = einmessenAbschliessen(zA);
+        if (!okB) okB = einmessenAbschliessen(zB);
       }
       ImuMessung o = ImuMessung();
       ImuMessung u = ImuMessung();
@@ -909,7 +906,7 @@ void testAK14() {
       }
       ellbogenAktualisieren(zA, o, u, 0.02f);
       ellbogenAktualisieren(zB, o, u, 0.02f);
-      if (k > 300) {
+      if (k > 1000) {
         float a = 0.0f;
         float b = 0.0f;
         bool bekA = ellbogenAbweichung(zA, a);
@@ -1012,7 +1009,7 @@ void testFuzz() {
       einmessenBewegungStart(z);
     }
     if (art == 2) {
-      einmessenLaufen(sim, z, 30.0f);
+      einmessenLaufen(sim, z);
     }
     int boeseAngenommen = 0;
     int boeseVeraendert = 0;
@@ -1045,12 +1042,11 @@ void testFuzz() {
     pruefe(nichtEndlich == 0, text);
   }
 
-  // Fuzz B: zufällige Reihenfolge aller Funktionen, auch ungewöhnliche Parameter für minBeugungGrad.
+  // Fuzz B: zufällige Reihenfolge aller Funktionen, (einmessenAbschliessen hat keinen Parameter mehr, REQ-005).
   std::srand(42);
   {
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
-    const float minBeugung[8] = {30.0f, 0.0f, -5.0f, NAN, INFINITY, 1e30f, 360.0f, -INFINITY};
     int nichtEndlich = 0;
     int nachResetBekannt = 0;
     int nachVerwerfenBekannt = 0;
@@ -1065,11 +1061,11 @@ void testFuzz() {
       } else if (op == 2) {
         einmessenBewegungStart(z);
       } else if (op == 3) {
-        einmessenAbschliessen(z, minBeugung[std::rand() % 8]);
+        einmessenAbschliessen(z);
       } else if (op == 6) {
-        einmessenDrehungStart(z);
+        // (Phase 3 entfällt mit REQ-005)
       } else if (op == 4) {
-        einmessenAbbrechen(z);
+        einmessenAbbrechen(z, EINMESSEN_GRUND_IMU);
       } else if (op == 5) {
         ellbogenLageVerwerfen(z);
         if (ellbogenAbweichung(z, a)) nachVerwerfenBekannt++;

@@ -26,7 +26,7 @@ void driftLauf(bool mitPausen, int fehlerMuster, const char *kopf) {
   ArmSim sim(bew, einbauStandard(), fehlerMitOffset(fehlerMuster), static_cast<unsigned long long>(1000 + fehlerMuster));
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   Messreihe m = laufe(sim, z, 600.0, 0.0);
   char text[200];
   std::snprintf(text, sizeof(text), "%s (Fehlermuster %d): Einmessen klappt", kopf, fehlerMuster);
@@ -66,7 +66,7 @@ void ueberstreckungHalten(bool weiterBewegen, const char *kopf) {
   ArmSim sim(bew, einbauStandard(), fehlerMitOffset(0), 1201);
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   laufe(sim, z, 2.0, 0.0);                       // Überstreckung erreichen
   Messreihe m = laufe(sim, z, 600.0, 0.0);       // 10 Minuten halten
   char text[200];
@@ -92,7 +92,7 @@ void ruheDrift(double flexZiel, const char *kopf) {
   ArmSim sim(bew, einbauStandard(), fehlerMitOffset(1), 1301);
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  bool ok = einmessenLaufen(sim, z, 30.0f);
+  bool ok = einmessenLaufen(sim, z);
   laufe(sim, z, 1.0, 0.0);                          // Bewegung zum Zielwinkel
   Messreihe anfang = laufe(sim, z, 2.0, 0.0);       // Anfangswert
   Messreihe lang = laufe(sim, z, 600.0, anfang.mittel);

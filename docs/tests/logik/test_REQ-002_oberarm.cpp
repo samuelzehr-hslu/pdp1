@@ -98,10 +98,10 @@ ZweiMalErgebnis laufeZweiMal(int k, int obArt, double obGrad, int zyklen2 = 2) {
              static_cast<unsigned long long>(500 + k));
   EllbogenZustand z;
   ellbogenZuruecksetzen(z);
-  r.ok1 = einmessenLaufen(sim, z, 30.0f);   // t = 0 bis 7,5
+  r.ok1 = einmessenLaufen(sim, z);   // t = 0 bis 7,5
   laufe(sim, z, 4.0, 0.0);                  // t = 7,5 bis 11,5
-  r.ok2 = einmessenLaufen(sim, z, 30.0f);   // t = 11,5 bis 19
-  r.nochmal = r.ok2 ? false : einmessenAbschliessen(z, 30.0f);
+  r.ok2 = einmessenLaufen(sim, z);   // t = 11,5 bis 19
+  r.nochmal = r.ok2 ? false : einmessenAbschliessen(z);
   double ref = r.ok2 ? -20.0 : 0.0;
   r.b = laufe(sim, z, 6.0, 0.0, ref);       // t = 19 bis 25
   r.h = laufe(sim, z, 4.0, 0.0, ref);       // t = 25 bis 29
@@ -132,8 +132,8 @@ void abbruchGruppe(const char *kopf, int obArt, double obGrad) {
       ArmSim sim(bew, einbauNr(k), fehlerNr(k), static_cast<unsigned long long>(400 + k));
       EllbogenZustand z;
       ellbogenZuruecksetzen(z);
-      bool ok = einmessenLaufen(sim, z, 30.0f);
-      bool nochmal = einmessenAbschliessen(z, 30.0f);
+      bool ok = einmessenLaufen(sim, z);
+      bool nochmal = einmessenAbschliessen(z);
       Messreihe m = laufe(sim, z, 6.0, 0.0);
       if (ok || nochmal || m.zyklen == 0 || m.unbekannt != m.zyklen) merke(schlechtOhne, k);
     }
@@ -183,7 +183,7 @@ void klapptGruppe(const char *kopf, int obArt, double obGrad) {
       ArmSim sim(bew, einbauNr(k), fehlerNr(k), static_cast<unsigned long long>(600 + k));
       EllbogenZustand z;
       ellbogenZuruecksetzen(z);
-      bool ok = einmessenLaufen(sim, z, 30.0f);
+      bool ok = einmessenLaufen(sim, z);
       Messreihe m = laufe(sim, z, 8.0, 0.0);
       if (!ok || !messOk(m)) {
         merke(schlechtOhne, k);
@@ -205,11 +205,13 @@ void klapptGruppe(const char *kopf, int obArt, double obGrad) {
   std::snprintf(text, sizeof(text),
                 "%s, ohne alte Referenz: Einmessen klappt und der Winkel stimmt danach auf 2,5 Grad (Fehler bei Einbau: %s)",
                 kopf, schlechtOhne.c_str());
-  pruefe(schlechtOhne.empty(), text);
+  if (obGrad < 20.0) ersetztDurchReq005(schlechtOhne.empty(), text);   // Kreis genau 15 Grad als Pflicht-Erfolg: ersetzt (REQ-005 AK-11 verlangt 20 Grad)
+  else pruefe(schlechtOhne.empty(), text);
   std::snprintf(text, sizeof(text),
                 "%s, mit alter Referenz: Einmessen klappt, neue Referenz, Winkel stimmt danach auf 2,5 Grad (Fehler bei Einbau: %s)",
                 kopf, schlechtMit.c_str());
-  pruefe(schlechtMit.empty(), text);
+  if (obGrad < 20.0) ersetztDurchReq005(schlechtMit.empty(), text);
+  else pruefe(schlechtMit.empty(), text);
 }
 
 // ======================================================================
@@ -234,8 +236,8 @@ void toleriertGruppe(const char *kopf, int obArt, double obGrad, int zyklen) {
       ArmSim sim(bew, einbauNr(k), fehlerNr(k), static_cast<unsigned long long>(800 + k));
       EllbogenZustand z;
       ellbogenZuruecksetzen(z);
-      bool ok = einmessenLaufen(sim, z, 30.0f);
-      bool nochmal = ok ? false : einmessenAbschliessen(z, 30.0f);
+      bool ok = einmessenLaufen(sim, z);
+      bool nochmal = ok ? false : einmessenAbschliessen(z);
       Messreihe m = laufe(sim, z, 8.0, 0.0);
       if (ok) {
         klapptOhne++;
@@ -294,9 +296,9 @@ void wiederholungNachAbbruch() {
     ArmSim sim(bew, einbauNr(k), fehlerNr(k), static_cast<unsigned long long>(700 + k));
     EllbogenZustand z;
     ellbogenZuruecksetzen(z);
-    bool ok1 = einmessenLaufen(sim, z, 30.0f);   // t = 0 bis 7,5, muss abbrechen
+    bool ok1 = einmessenLaufen(sim, z);   // t = 0 bis 7,5, muss abbrechen
     laufe(sim, z, 2.0, 0.0);                     // t = 7,5 bis 9,5
-    bool ok2 = einmessenLaufen(sim, z, 30.0f);   // t = 9,5 bis 17, muss klappen
+    bool ok2 = einmessenLaufen(sim, z);   // t = 9,5 bis 17, muss klappen
     Messreihe m = laufe(sim, z, 8.0, 0.0);
     if (ok1 || !ok2 || !messOk(m)) merke(schlecht, k);
   }

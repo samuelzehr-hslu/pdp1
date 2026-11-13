@@ -461,16 +461,37 @@ inline void zyklenOhne(ArmSim &sim, EllbogenZustand &z, int anzahl) {
   }
 }
 
-// Einmessen wie im Betrieb: Start, 2000 ms Phase 1 (100 Zyklen), 4000 ms Phase 2 (200 Zyklen),
-// 1500 ms Phase 3 (75 Zyklen, Hand drehen), Abschluss. Zusammen 7500 ms.
-inline bool einmessenLaufen(ArmSim &sim, EllbogenZustand &z, float minBeugung) {
+// Prüfung, die nur den ALTEN Einmess-Ablauf von REQ-002 testete (festes Skript: Beugen und Oberarm-Kreis gleichzeitig,
+// 5,5 s Schritt 2, genau die Minimalwerte). REQ-005 ersetzt diesen Ablauf (AK-11 nacheinander, bis 30 s, >= 20 / >= 60 Grad;
+// AK-12: Erfolg nur mit gleichzeitigen Bewegungen nicht verlangt). Wird gezeigt, zählt aber NICHT als Fehler.
+// Die Grenzen 15 / 45 Grad sind durch die REQ-005-Tests (AK-8, AK-13) abgedeckt.
+inline void ersetztDurchReq005(bool bedingung, const char *text) {
+  std::printf("  ersetzt durch REQ-005 (zählt nicht): %s [%s]\n", text, bedingung ? "wäre ok" : "wäre nicht ok");
+}
+
+// Einmessen wie im Betrieb nach REQ-005, mit dem festen Bewegungs-Skript der älteren Tests (zusammen 7500 ms):
+//   2000 ms still (Schritt 1), dann sofort bestätigt, dann 5500 ms Schritt 2 (Beugen + Oberarm-Kreis, dann Hand drehen).
+// Im Schritt 2 wird alle 1000 ms und am Ende (7500 ms) einmessenAbschliessen versucht (wie im Betrieb höchstens 1 Mal pro Sekunde).
+// Klappt es früher, laufen die restlichen Zyklen als normale Messung weiter. Der Aufruf verbraucht immer genau 375 Zyklen (7,5 s),
+// damit die Zeitpläne der älteren Tests (zweites Einmessen ab t = 11,5 s usw.) weiter stimmen.
+// Klappt es nicht, wird mit dem Grund aus einmessenFehlenderGrund abgebrochen (vereinfacht: der Test wartet nicht die vollen 30 s).
+// Die vollen 30 s und das freie Bewegen stehen in test_REQ-005.cpp und test_REQ-005_frei.cpp.
+inline bool einmessenLaufen(ArmSim &sim, EllbogenZustand &z) {
   einmessenStart(z);
   zyklenOhne(sim, z, 100);
+  if (!einmessenStillFertig(z)) {
+    einmessenAbbrechen(z, EINMESSEN_GRUND_RUHIG);
+    zyklenOhne(sim, z, 275);
+    return false;
+  }
   einmessenBewegungStart(z);
-  zyklenOhne(sim, z, 200);
-  einmessenDrehungStart(z);
-  zyklenOhne(sim, z, 75);
-  return einmessenAbschliessen(z, minBeugung);
+  bool ok = false;
+  for (int i = 1; i <= 275; i++) {
+    zyklenOhne(sim, z, 1);
+    if (!ok && (i % 50 == 0 || i == 275)) ok = einmessenAbschliessen(z);
+  }
+  if (!ok) einmessenAbbrechen(z, einmessenFehlenderGrund(z));
+  return ok;
 }
 
 struct Messreihe {

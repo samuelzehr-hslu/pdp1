@@ -67,29 +67,36 @@ struct FehlerMusterZustand {
 //   Der Ellbogenwinkel ist dann der Winkel, um den sich die Knochenachse des Unterarms
 //   um die Scharnier-Achse des Ellbogens gedreht hat. Drehen von Hand, Schulter oder
 //   Schwenken ändern diesen Winkel nicht (auch nicht, wenn man gleichzeitig beugt).
-//   Einmessen: Phase 1 (still) misst Referenz und Gyro-Fehler. In Phase 2 (beugen und
-//   Oberarm mitbewegen) sucht das Gerät die Scharnier-Achse in beiden IMUs.
-//   Ist die Achse nicht eindeutig, bricht es ab ("Oberarm"), es rät nie.
-//   Phase 3 (Hand drehen): Die Drehung des Unterarms um seine Knochenachse wird gemessen.
-//   So weiss das Gerät die Knochenachse, ohne anzunehmen, dass der Arm senkrecht hängt.
+//   Einmessen (REQ-005), ohne feste Zeiten:
+//   Schritt 1 (still): Das Gerät wartet, bis beide IMUs 2 s am Stück ruhig sind (Wackeln = neu zählen).
+//     Aus genau diesen 2 s kommen die Referenz (0 Grad, Schwerkraft) und der Gyro-Fehler.
+//   Warte-Zustand: bis die Person bestätigt. Die Logik sammelt nichts, führt aber die Lage beider IMUs
+//     weiter (Gyro, von der Schwerkraft gestützt).
+//   Schritt 2 (frei bewegen): beugen, Oberarm bewegen, Hand drehen, in beliebiger Reihenfolge und beliebig oft.
+//     Das Gerät ordnet jede Messung ein:
+//       - Handdrehung (Unterarm dreht um seine Knochenachse, Oberarm ruhig): zählt nur für die Knochenachse
+//         und den Hand-Wert. Grund: Die Suche der Scharnier-Achse erlaubt nur EINE Drehachse.
+//       - sonst (Beugen, Oberarm bewegen, Pausen): zählt für die Suche der Scharnier-Achse.
+//     Nur zum EINORDNEN nimmt das Gerät an, dass der Unterarm in Schritt 1 ungefähr senkrecht hing
+//     (höchstens 30 Grad schief). Die Achsen selbst (Scharnier-Achse und Knochenachse) werden nur aus der
+//     echten Bewegung gerechnet, dafür wird NICHT angenommen, dass der Arm senkrecht hängt.
+//   Jede Sekunde prüft einmessenAbschliessen, ob alles reicht. Ist die Achse nicht eindeutig, sammelt das
+//   Gerät weiter (oder jointsense.ino bricht nach 30 s ab). Das Gerät rät nie.
+//   Die Lage beider IMUs läuft von Schritt 1 bis zum Abschluss durch. Der Arm muss bei der Bestätigung
+//   nicht wieder in der Referenz-Lage hängen.
 //
-//   Ablauf mit Warten (REQ-004), so ruft jointsense.ino die Funktionen auf:
-//     einmessenStart            -> Phase 1 (Still, 2000 ms)
-//     einmessenStillAuswerten   -> prüft Phase 1, dann Warte-Zustand 1 (bis die Person bestätigt)
-//     einmessenBewegungStart    -> Phase 2 (Bewegung, 4000 ms)
-//     einmessenBewegungAuswerten-> prüft Phase 2, dann Warte-Zustand 2
-//     einmessenDrehungStart     -> Phase 3 (Hand drehen, 1500 ms)
-//     einmessenAbschliessen     -> prüft Phase 3 und setzt Referenz und Achsen
-//   In den Warte-Zuständen ruft das .ino nur ellbogenAktualisieren auf. Die Logik sammelt dort
-//   KEINE Einmess-Daten, sie führt nur die Lage beider IMUs weiter (Gyro, von der Schwerkraft
-//   gestützt). So bleibt die Verbindung Referenz (Phase 1) <-> Achsen (Phase 2 und 3) richtig,
-//   auch wenn die Person bis zu 30 s wartet und den Arm dabei bewegt.
-//   Der alte Ablauf ohne die zwei Auswerte-Funktionen (REQ-002) funktioniert weiterhin gleich.
+//   So ruft jointsense.ino die Funktionen auf:
+//     einmessenStart          -> Schritt 1 (still)
+//     einmessenStillFertig    -> true = 2 s ruhig, die Logik ist jetzt im Warte-Zustand
+//     einmessenBewegungStart  -> Schritt 2 (frei bewegen), nach der Bestätigung
+//     einmessenAbschliessen   -> einmal pro Sekunde: true = fertig, Referenz und Achse sind gesetzt
+//     einmessenFortschritt    -> Zahlen für die Anzeige (Ruhezeit, Beugung, Oberarm, Hand, Achse)
+//     einmessenAbbrechen      -> Abbruch (Wartezeit, IMU, 30 s um), Referenz und Achse bleiben
 
 // Gründe, warum ein Einmessen abgebrochen wurde (für die Meldung im Seriellen Monitor).
 #define EINMESSEN_GRUND_KEINER  0   // kein Abbruch
-#define EINMESSEN_GRUND_BEUGUNG 1   // Beugung in Phase 2 zu klein
-#define EINMESSEN_GRUND_RUHIG   2   // Arm war in Phase 1 nicht ruhig
+#define EINMESSEN_GRUND_BEUGUNG 1   // Beugung in Schritt 2 zu klein
+#define EINMESSEN_GRUND_RUHIG   2   // Arm war in Schritt 1 nicht 2 s am Stück ruhig (30 s um)
 #define EINMESSEN_GRUND_IMU     3   // IMU ausgefallen oder ungültige Werte
 #define EINMESSEN_GRUND_OBERARM 4   // Scharnier-Achse nicht eindeutig (z. B. Oberarm still)
 #define EINMESSEN_GRUND_HAND    5   // Knochenachse des Unterarms nicht sicher bestimmt (Hand nicht gedreht)
@@ -97,8 +104,23 @@ struct FehlerMusterZustand {
                                         // Diesen Grund gibt jointsense.ino selbst an die Meldung weiter,
                                         // einmessenGrund() liefert ihn nie.
 
-// Die Anzahl Zwischenwerte (alle 0,25 s), die beim Einmessen für die Beuge-Prüfung gemerkt werden.
-#define ELLBOGEN_ZWISCHENWERTE 17
+// Ab diesen Werten ist der Fortschritt in Schritt 2 "OK" (AK-8, gleiche Grenzen wie REQ-002).
+#define EINMESSEN_BEUGUNG_MIN 30.0f  // Grad: Spannweite der Beugung
+#define EINMESSEN_OBERARM_MIN 15.0f  // Grad: Spannweite der Oberarm-Neigung (in beiden Richtungen)
+#define EINMESSEN_HAND_MIN    45.0f  // Grad: grösste Drehung der Hand
+
+// So viele Lagen werden in Schritt 2 gemerkt: 2 Extreme der Beugung, 2 Extreme der vorläufigen Beugung
+// und 12 neue (10 pro s, jede Sekunde ausgewertet).
+#define ELLBOGEN_POSEN 16
+
+// Fortschritt beim Einmessen (für die Anzeige im Seriellen Monitor, REQ-005 AK-4 und AK-8).
+struct EinmessFortschritt {
+  float ruhigSekunden;  // Schritt 1: Ruhezeit am Stück in s
+  float beugungGrad;    // Schritt 2: Spannweite der Beugung in Grad (AK-8)
+  float oberarmGrad;    // Schritt 2: kleinere Abweichung des Oberarms in Grad (AK-8)
+  float handGrad;       // Schritt 2: grösste Drehung der Hand in Grad (AK-8)
+  uint8_t achseProzent; // Schritt 2: 0 bis 100, 100 = Achse eindeutig (AK-8)
+};
 
 // Eine Messung einer IMU, in den Achsen des Sensors (so wie der MPU6050 sie liefert).
 struct ImuMessung {
@@ -131,31 +153,36 @@ struct EllbogenZustand {
   float drehungLetzte;      // Verdrehung des Unterarms um seine Achse vor dem Ausfall (Grad)
 
   // ----- Einmessen (Sammelfächer, nur während dem Einmessen gebraucht) -----
-  uint8_t phase;            // 0 = kein Einmessen, 1 = Still, 2 = Bewegung, 3 = Hand drehen,
-                            // 4 = Warte-Zustand 1, 5 = Warte-Zustand 2 (REQ-004)
+  uint8_t phase;            // 0 = kein Einmessen, 1 = Schritt 1 (still), 2 = Warte-Zustand,
+                            // 3 = Schritt 2 (frei bewegen)
   uint8_t grund;            // Abbruchgrund (EINMESSEN_GRUND_...)
-  bool bewegungOk;          // true = Phase 2 wurde schon geprüft und hat bestanden (REQ-004)
-  uint8_t zwischenAnzahl;   // Anzahl gespeicherter Zwischenwerte
-  bool ratenGueltig2;       // true = die Geschwindigkeiten vom letzten Zyklus von Phase 2 sind da
-  uint16_t anzahl1;         // Anzahl Messungen in Phase 1
-  uint16_t anzahlW;         // Anzahl Messungen in Phase 1, die zum Gyro-Mittelwert zählen
-  uint16_t anzahlG;         // Anzahl brauchbarer Messungen in Phase 2
-  float summeA1[3];         // Phase 1: Summe Beschleunigung (danach: Schwerkraft-Richtung, Länge 1)
+  bool ratenGueltig2;       // true = die Geschwindigkeiten vom letzten Zyklus (für lage) sind da
+  bool beugGueltig;         // true = posen Platz 0 und 1 enthalten die Lagen mit kleinstem und grösstem Winkel
+  uint8_t posenAnzahl;      // nächster freier Platz in posen (neue Lagen ab Platz 2)
+  uint8_t zyklen;           // zählt die Messungen bis zur nächsten gemerkten Lage
+  uint8_t achseProzent;     // Schritt 2: Achse in Prozent (100 = eindeutig)
+  uint16_t anzahl1;         // Anzahl ruhiger Messungen in Schritt 1
+  uint16_t anzahlW;         // davon: Anzahl, die zum Gyro-Mittelwert zählen
+  uint16_t anzahlG;         // Anzahl Messungen für die Achsen-Suche in Schritt 2
+  float ruhigZeit;          // Schritt 1: Ruhezeit am Stück in s
+  float summeA1[3];         // Schritt 1: Summe Beschleunigung (danach: Schwerkraft-Richtung der Referenz, Länge 1)
   float summeA2[3];
-  float summeW1[3];         // Phase 1: laufender Mittelwert Gyro (= Gyro-Fehler)
+  float summeW1[3];         // laufender Mittelwert Gyro (= Gyro-Fehler), danach langsam nachgeführt
   float summeW2[3];
-  float summeBetrag1;       // Phase 1: Summe vom Betrag der Drehgeschwindigkeit
-  float summeBetrag2;
-  float lage[2][4];         // Drehung von IMU 1 und IMU 2 (Quaternion): im Warte-Zustand 1 seit Phase 1,
-                            // ab Phase 2 seit Beginn von Phase 2
-  float schwer0[2][3];      // Schwerkraft-Richtung von IMU 1 und IMU 2 zu Beginn von Phase 2 (Ausgangslage, Länge 1)
-  float rateP[2][3];        // Phase 2: letzte Drehgeschwindigkeit von IMU 1 und IMU 2 (rad/s)
-  float matrixM[21];        // Phase 2: Sammelmatrix für die Scharnier-Achsen (6x6, obere Hälfte)
-  float dreh[8];            // Phase 3: Richtung, Summe der Drehachse von IMU 2, Weg von IMU 1 und IMU 2 (rad)
-  float zeit2;              // Phase 2: vergangene Zeit in s
-  float kippGlatt[3];       // Phase 2: geglättete Schwerkraft-Richtung von IMU 1
-  float kippCosMin;         // Phase 2: kleinster Cosinus der Neigung des Oberarms (1 = keine Neigung)
-  int16_t zwischen[ELLBOGEN_ZWISCHENWERTE][8];  // Zwischenwerte der beiden Drehungen (mal 16000)
+  float lage[2][4];         // Drehung von IMU 1 und IMU 2 (Quaternion) seit der Referenz-Lage (Schritt 1)
+  float rateP[2][3];        // letzte Drehgeschwindigkeit von IMU 1 und IMU 2 (rad/s)
+  float matrixM[21];        // Schritt 2: Sammelmatrix für die Scharnier-Achsen (6x6, obere Hälfte)
+  float eigenV[6][6];       // Schritt 2: Eigenvektoren der letzten Sekunde (dort rechnet die Achsen-Suche weiter)
+  float dreh[8];            // Schritt 2: [0..2] Summe der Beuge-Drehachse (vorläufige Beugung),
+                            // Handdrehung: [3..5] Summe der Drehachse, [6] Drehung mit Vorzeichen (rad), [7] Weg (rad)
+  float theta[3];           // Schritt 2, vorläufige Beugung: [0] Winkel, [1] kleinster, [2] grösster (rad)
+  float oberMin[2];         // Schritt 2: kleinste Neigung des Oberarms je Richtung (Sinus)
+  float oberMax[2];         // Schritt 2: grösste Neigung des Oberarms je Richtung (Sinus)
+  float beugMin;            // Schritt 2: kleinster Winkel (Grad, mit der neuesten Achse)
+  float beugMax;            // Schritt 2: grösster Winkel
+  float beugBest;           // Schritt 2: grösste Spannweite der Beugung bisher (wird nie kleiner)
+  float handMax;            // Schritt 2: grösste Drehung der Hand in Grad (wird nie kleiner)
+  int16_t posen[ELLBOGEN_POSEN][8];  // Schritt 2: gemerkte Lagen beider IMUs (je 4 Zahlen mal 16000)
 };
 
 
@@ -232,36 +259,33 @@ void ellbogenZuruecksetzen(EllbogenZustand &z);
 bool ellbogenAktualisieren(EllbogenZustand &z, const ImuMessung &oberarm,
                            const ImuMessung &unterarm, float dtSekunden);
 
-// Beginnt Phase 1 (Still). Referenz und Achse von vorher bleiben gültig.
+// Beginnt Schritt 1 (still). Ruhezeit 0, Sammelfächer leer.
+// Referenz und Achse von vorher bleiben, bis ein Einmessen erfolgreich ist.
 void einmessenStart(EllbogenZustand &z);
 
-// Am Ende von Phase 1 (nach 2000 ms) aufrufen (REQ-004).
-// true  = Arm war ruhig, weiter: die Logik ist jetzt im Warte-Zustand 1.
-// false = Abbruch, einmessenGrund(z) gibt EINMESSEN_GRUND_RUHIG (auch wenn es in Phase 1
-//         keinen einzigen gültigen Messzyklus gab). Alte Referenz und Achse bleiben.
-bool einmessenStillAuswerten(EllbogenZustand &z);
+// true, sobald in Schritt 1 2000 ms am Stück ruhig waren (AK-3). Die Logik ist dann im Warte-Zustand
+// und sammelt nichts mehr für Schritt 1.
+bool einmessenStillFertig(const EllbogenZustand &z);
 
-// Beginnt Phase 2 (Bewegung): nach der Bestätigung im Warte-Zustand 1 (REQ-004)
-// oder (alter Ablauf, REQ-002) direkt nach 2000 ms Phase 1.
+// Beginnt Schritt 2 (frei bewegen), nach der Bestätigung im Warte-Zustand. Merkt die Ausgangslage.
 void einmessenBewegungStart(EllbogenZustand &z);
 
-// Am Ende von Phase 2 (nach 4000 ms) aufrufen (REQ-004). Prüft Beugung und Scharnier-Achse.
-// true  = beides ok, die Logik ist jetzt im Warte-Zustand 2.
-// false = Abbruch, Grund EINMESSEN_GRUND_BEUGUNG oder EINMESSEN_GRUND_OBERARM.
-bool einmessenBewegungAuswerten(EllbogenZustand &z, float minBeugungGrad);
+// Füllt f mit dem Fortschritt (AK-4 und AK-8). Nicht benutzte Werte sind 0. Rechnet fast nichts.
+void einmessenFortschritt(const EllbogenZustand &z, EinmessFortschritt &f);
 
-// Beginnt Phase 3 (Hand drehen): nach der Bestätigung im Warte-Zustand 2 (REQ-004)
-// oder (alter Ablauf) direkt nach Phase 2. Nach 1500 ms folgt einmessenAbschliessen.
-void einmessenDrehungStart(EllbogenZustand &z);
+// Versucht abzuschliessen (AK-10). Höchstens einmal pro 1000 ms aufrufen: rechnet die Achse
+// und den Fortschritt neu (dauert auf dem Uno einige 10 ms, AK-17).
+// true  = alle vier Werte OK, neue Referenz und Achse gesetzt, Einmessen beendet.
+// false = noch nicht genug, Schritt 2 läuft weiter (Referenz und Achse unverändert).
+bool einmessenAbschliessen(EllbogenZustand &z);
 
-// Schliesst das Einmessen am Ende von Phase 3 ab. minBeugungGrad: so gross muss die Beugung
-// (Spannweite) sein. Prüft alles, was noch nicht bestanden ist.
-// true  = neue Referenz und Achse gesetzt, die Lage ist bekannt.
-// false = Abbruch (Grund siehe einmessenGrund): alte Referenz und Achse bleiben.
-bool einmessenAbschliessen(EllbogenZustand &z, float minBeugungGrad);
+// Bricht ein laufendes Einmessen ab (Wartezeit, IMU, 30 s um). grund: EINMESSEN_GRUND_...
+// Referenz und Achse bleiben wie vorher.
+void einmessenAbbrechen(EllbogenZustand &z, uint8_t grund);
 
-// Bricht ein laufendes Einmessen ab (z. B. IMU ausgefallen). Referenz und Achse bleiben.
-void einmessenAbbrechen(EllbogenZustand &z);
+// Für AK-13: der erste nicht erfüllte Wert (Beugung, Oberarm, Hand; Achse unter 100 % = Oberarm).
+// EINMESSEN_GRUND_KEINER, wenn alles erfüllt ist.
+uint8_t einmessenFehlenderGrund(const EllbogenZustand &z);
 
 // Sagt, warum das letzte Einmessen abgebrochen wurde (EINMESSEN_GRUND_...).
 // Nur für die Meldung im Seriellen Monitor.
