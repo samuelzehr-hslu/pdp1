@@ -45,8 +45,15 @@ Personen mit hyperlaxen bzw. überstreckbaren Gelenken nehmen eine Überstreckun
 - Abtastrate: 50–100 Hz (Anforderung: ≥ 25 Hz)
 - Sensorfusion: Komplementärfilter bzw. integrierte Fusion (BNO085). Beschleunigung **und** Gyroskop, damit Drehungen (Unterarm, Schulter, Schwenken) den Ellbogenwinkel nicht verfälschen (REQ-002)
 - Entprellung: 50–100 ms gegen Fehlalarme, plus kleine Hysterese gegen Flattern an der Grenze
-- Einmessen (REQ-005): Referenz = Mittelwert über 2 s ruhige Zeit am Stück (Wackeln zählt neu, kein Abbruch). Danach Arm frei bewegen: beugen (Scharnier-Achse), Oberarm in zwei Richtungen bewegen (Achse der Oberarm-IMU), Hand drehen (Knochenachse des Unterarms), in beliebiger Reihenfolge. Das Gerät sammelt, bis alle Werte genügen und die Achsen eindeutig sind, und zeigt den Fortschritt im Seriellen Monitor. Jeder Teil höchstens 30 s, im Zweifel weiter sammeln oder Abbruch statt Raten
+- Einmessen (REQ-005): Referenz = Mittelwert über 2 s ruhige Zeit am Stück (Wackeln zählt neu, kein Abbruch). Danach Arm frei bewegen: beugen (Scharnier-Achse), Oberarm in zwei Richtungen bewegen (Achse der Oberarm-IMU), Hand drehen (Knochenachse des Unterarms), in beliebiger Reihenfolge. Das Gerät sammelt, bis alle Werte genügen und die Achsen eindeutig sind, und zeigt den Fortschritt im GUI bzw. im Seriellen Monitor. Jeder Teil höchstens 30 s, im Zweifel weiter sammeln oder Abbruch statt Raten
 - Drift: Das Gerät korrigiert die Gyro-Drift im Betrieb selbst (Ruhe erkennen, Gelenkachse als Zusatzbedingung, Seel et al., 2014). Die Referenz (0°) wird dabei nie automatisch verändert. Ziel: 10 min ± 2° ohne Neu-Einmessen
+
+### Anzeige (REQ-006)
+
+Ein Schalter oben in `jointsense/jointsense.ino` wählt, was über USB kommt:
+
+- `#define GUI_MODUS 1` (Einstellung im Repo): Datenzeilen mit 115200 Baud für das Live-GUI im Browser, `tools/gui/jointsense_live.html` (Anleitung: `tools/gui/README.md`).
+- `#define GUI_MODUS 0`: Texte für den Seriellen Monitor der Arduino IDE mit 9600 Baud.
 
 ### Setup
 
@@ -61,7 +68,7 @@ Die Pin-Nummern stehen nur in `jointsense/pins.h`. Quelle ist die Verdrahtungsta
 
 1. **Anlegen:** Sleeve über den Ellbogen ziehen, Markierung auf Gelenkmitte ausrichten.
 2. **Einschalten:** Taste lang drücken, Status-LED zeigt «aktiv».
-3. **Einmessen:** Im Stehen den Arm entspannt gestreckt locker nach unten hängen lassen, Taste kurz drücken und still halten, bis das Gerät 2 s Ruhe gemessen hat (Vibrationsstoss 300 ms). Taste nochmals drücken, dann den Arm frei bewegen, **eine Bewegung nach der anderen** (Reihenfolge egal): ein paar Mal beugen und strecken, den Oberarm in einem kleinen Kreis bewegen, die Hand hin und zurück drehen (dabei Oberarm ruhig halten). Alles gleichzeitig zählt nicht. Der Serielle Monitor zeigt den Fortschritt (`Beugung 41/30 OK  Oberarm 9/15  Hand 22/45  Achse 60%`). Ist alles OK: Bestätigungsvibration. Nach dem Einschalten muss einmal eingemessen werden (kein automatisches Einmessen).
+3. **Einmessen:** Im Stehen den Arm entspannt gestreckt locker nach unten hängen lassen, Taste kurz drücken (oder Enter im Seriellen Monitor bzw. Knopf «Einmessen» im GUI) und still halten, bis das Gerät 2 s Ruhe gemessen hat (Vibrationsstoss 300 ms). Nochmals bestätigen, dann den Arm frei bewegen, **eine Bewegung nach der anderen** (Reihenfolge egal): ein paar Mal beugen und strecken, den Oberarm in einem kleinen Kreis bewegen, die Hand hin und zurück drehen (dabei Oberarm ruhig halten). Alles gleichzeitig zählt nicht. Das GUI zeigt den Fortschritt (im Text-Modus der Serielle Monitor: `Beugung 41/30 OK  Oberarm 9/15  Hand 22/45  Achse 60%`). Ist alles OK: Bestätigungsvibration. Nach dem Einschalten muss einmal eingemessen werden (kein automatisches Einmessen).
 4. **Training:** Solange der Winkel im zulässigen Bereich bleibt, passiert nichts.
 5. **Überstreckung:** Motor vibriert, bis das Gelenk zurückgeführt wird.
 6. **Beenden:** Taste lang drücken; Elektronikmodul zum Waschen entnehmen.

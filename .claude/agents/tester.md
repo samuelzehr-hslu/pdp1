@@ -58,7 +58,8 @@ Gestartet wird alles mit `python docs/tests/alle_tests.py`. Das Skript übersetz
 
 | Ordner | Inhalt |
 |---|---|
-| `docs/tests/logik/` | C++-Tests für `g++` (Logik- und Fuzz-Tests), eine Datei pro REQ, z. B. `test_REQ-003.cpp` |
+| `docs/tests/logik/` | C++-Tests für `g++` oder `clang++` (Logik- und Fuzz-Tests), eine Datei pro REQ, z. B. `test_REQ-003.cpp` |
+| `docs/tests/ino_host/`, `docs/tests/gui_host/`, `docs/tests/refactoring_pruefen.py` | Vergleich vorher/nachher bei Refactorings (REQ-007): echte `.ino` mit Arduino-Attrappe, GUI in `node`, Schnittstelle/Speicher/Funktionslängen. Anleitung: `docs/tests/ino_host/README.md` |
 | `docs/tests/szenarien/` | Python-Skripte, die **nur Winkelverläufe** erzeugen (z. B. «Arm langsam überstrecken», «Zittern an der Grenze») |
 | `docs/wokwi/` | Einstellungen für `wokwi-cli`, Namen der Regler in `README.md` |
 | `docs/testberichte/` | Berichte nach `_vorlage.md` |

@@ -81,6 +81,8 @@ Arduino-Sketch in `jointsense/`. Der Ordnername muss gleich heissen wie die `.in
 - `jointsense/logik.h` + `jointsense/logik.cpp`: reine Logik (Grenzwert, Entprellung, Hysterese, Einmessen) **ohne Arduino-Befehle**. In `.h` steht die Liste der Funktionen, in `.cpp` ihr Inhalt. So kann man die Logik mit `g++` auf dem PC testen. Zeit (`millis()`) wird als Wert übergeben, nicht in der Logik abgefragt.
 - `jointsense/pins.h`: Pins und I²C-Adressen. SDA/SCL (A4/A5) werden von `Wire` automatisch genutzt.
 - `jointsense/diagram.json`: Schaltung für die Wokwi-Simulation.
+- Schalter `GUI_MODUS` oben in `jointsense.ino` (REQ-006): `1` = Datenzeilen für das Live-GUI (115200 Baud, Einstellung im Repo), `0` = Texte für den Seriellen Monitor (9600 Baud).
+- `tools/gui/jointsense_live.html`: Live-GUI im Browser (Chrome/Edge), Anleitung in `tools/gui/README.md`.
 
 Das Signalverarbeitungs-Konzept (Abtastrate, Sensorfusion, Entprellung, Einmessen, Drift) steht in der README unter «Software».
 
@@ -89,7 +91,8 @@ Dokumentation und Tests liegen in `docs/`:
 | Ordner / Datei | Inhalt |
 |---|---|
 | `docs/anforderungen/` | Anforderungen `REQ-xxx.md` und `_vorlage.md` |
-| `docs/tests/logik/` | Logik- und Fuzz-Tests (`g++`), Start mit `python docs/tests/alle_tests.py` (Mac/Linux: `python3`) |
+| `docs/tests/logik/` | Logik- und Fuzz-Tests (`g++` oder `clang++`), Start mit `python docs/tests/alle_tests.py` (Mac/Linux: `python3`) |
+| `docs/tests/ino_host/`, `docs/tests/gui_host/`, `docs/tests/refactoring_pruefen.py` | Vergleich vorher/nachher bei Refactorings (REQ-007): echte `.ino` mit Arduino-Attrappe auf dem PC, GUI in `node`, Schnittstelle, Speicher, Funktionslängen |
 | `docs/tests/szenarien/` | Python erzeugt Winkelverläufe (CSV), baut die Logik **nicht** nach |
 | `docs/testberichte/` | Testberichte pro Anforderung und Runde |
 | `docs/wokwi/` | `wokwi.toml` und Anleitung für `wokwi-cli` |
@@ -108,7 +111,7 @@ Gebaut wird mit der Arduino IDE oder `arduino-cli`. Tests laufen auf dem PC (sie
 
 Diese Punkte sind im Team noch zu klären und in `pins.h` als `TODO` markiert:
 
-1. Pins für **Taste** und **Status-LED**: in der README unter «Bedienung» erwähnt, aber nicht in der Verdrahtungstabelle.
+1. **Taste** an D2 ist nur *vorläufig* (für Wokwi gewählt), das Team muss den Pin bestätigen. Der Pin für die **Status-LED** ist noch offen (in der README unter «Bedienung» erwähnt, aber nicht in der Verdrahtungstabelle).
 2. **IMU-Typ** ist offen. Die README nennt den BNO085, die Adressen `0x68`/`0x69` über AD0 passen aber zu MPU6050/MPU6500 (BNO085: `0x4A`/`0x4B`).
 3. **Motortreiber-Typ** ist offen.
 4. **IMU-Bibliothek** ist offen (README «Setup», Punkt 3).

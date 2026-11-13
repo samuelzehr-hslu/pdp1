@@ -39,7 +39,7 @@ arduino-cli compile --fqbn arduino:avr:uno --warnings all --output-dir scratch/b
 
 ## Einstellungen im Code (keine Bibliothek, nur Register der IMU und des Busses)
 
-Stand REQ-002. Der Code spricht die IMUs wie einen MPU6050 an (der IMU-Typ ist weiterhin ein offener Team-Punkt). Nur die Sensor-Funktionen in `jointsense.ino` kennen den Chip.
+Eingeführt mit REQ-002, nach dem Refactoring (REQ-007) unverändert. Der Code spricht die IMUs wie einen MPU6050 an (der IMU-Typ ist weiterhin ein offener Team-Punkt). Nur die Sensor-Funktionen in `jointsense.ino` kennen den Chip.
 
 | Einstellung | Wert | Grund |
 |---|---|---|
@@ -56,11 +56,11 @@ Keine neue Bibliothek. Es wird nur `math.h` aus dem Arduino-Core (avr-libc) benu
 | Teil | Wert | Grund |
 |---|---|---|
 | Lage der IMUs zueinander | Quaternion (4 `float`), von beiden Gyros weitergedreht, von der Schwerkraft korrigiert | Drehungen um Knochenachsen ändern den Ellbogenwinkel nicht, auch nicht bei mehreren Bewegungen gleichzeitig |
-| Flash (Uno), `GUI_MODUS 0` (Text) | 32252 von 32256 Byte (99 %), gemessen mit `arduino-cli 1.5.1` (REQ-006; gleich wie REQ-005 Runde 3, das Programm ist Byte für Byte gleich wie vor REQ-006; vor REQ-005 30410 Byte = 94 %) | Grenze 32256 Byte. Nur noch 4 Byte frei: neue Funktionen im Text-Modus nur, wenn anderswo gespart wird |
-| RAM (globale Variablen), `GUI_MODUS 0` (Text) | 1322 von 2048 Byte (64 %), 726 Byte für lokale Variablen frei (REQ-006) | Grenze 70 % = 1434 Byte. Neu im Zustand seit REQ-005: Eigenvektoren der letzten Sekunde (144 Byte) und 16 gemerkte Lagen (256 Byte). Die Achsen-Suche hat noch ein lokales 6x6-Feld (144 Byte) auf dem Stapel |
-| Flash (Uno), `GUI_MODUS 1` (GUI) | 31836 von 32256 Byte (98 %), gemessen mit `arduino-cli 1.5.1` (REQ-006) | Kleiner als der Text-Modus, weil die langen Texte wegfallen |
-| RAM (globale Variablen), `GUI_MODUS 1` (GUI) | 1339 von 2048 Byte (65 %), 709 Byte für lokale Variablen frei (REQ-006) | Grenze 1434 Byte. Neu: Rohwerte beider IMUs für die D-Zeile (3 x 6 `int16_t` = 36 Byte) und wenige Merker; dafür fällt die Neigungs-Anzeige weg |
-| Ausgabe-Schalter `GUI_MODUS` (REQ-006) | `#define` oben in `jointsense.ino`, mit `#if` | Der nicht gewählte Teil wird gar nicht kompiliert. So wird der Text-Modus nicht grösser (Flash ist dort fast voll) |
+| Flash (Uno), `GUI_MODUS 0` (Text) | 31892 von 32256 Byte (98 %), gemessen mit `arduino-cli 1.5.1` nach REQ-007 (vorher 32252 Byte) | Grenze 32256 Byte. Rund 364 Byte frei: knapp, neue Funktionen im Text-Modus sparsam halten |
+| RAM (globale Variablen), `GUI_MODUS 0` (Text) | 1322 von 2048 Byte (64 %), 726 Byte für lokale Variablen frei (nach REQ-007 unverändert) | Grenze 70 % = 1434 Byte. Im Zustand seit REQ-005: Eigenvektoren der letzten Sekunde (144 Byte) und 16 gemerkte Lagen (256 Byte). Die Achsen-Suche hat noch ein lokales 6x6-Feld (144 Byte) auf dem Stapel |
+| Flash (Uno), `GUI_MODUS 1` (GUI, Standard) | 31454 von 32256 Byte (97 %), gemessen mit `arduino-cli 1.5.1` nach REQ-007 (vorher 31836 Byte) | Kleiner als der Text-Modus, weil die langen Texte wegfallen |
+| RAM (globale Variablen), `GUI_MODUS 1` (GUI, Standard) | 1339 von 2048 Byte (65 %), 709 Byte für lokale Variablen frei (nach REQ-007 unverändert) | Grenze 1434 Byte. Seit REQ-006: Rohwerte beider IMUs für die D-Zeile (3 x 6 `int16_t` = 36 Byte) und wenige Merker; dafür fällt die Neigungs-Anzeige weg |
+| Ausgabe-Schalter `GUI_MODUS` (REQ-006) | `#define` oben in `jointsense.ino` (Standard `1`), mit `#if`. Seit REQ-007 dazu das Makro `MODUS_TEXT("GUI-Text", "Monitor-Text")`: wählt bei Meldungen, die es in beiden Modi gibt, den passenden Text (als `F(...)` im Flash) | Der nicht gewählte Teil wird gar nicht kompiliert. So wird kein Modus durch den anderen grösser. `MODUS_TEXT` spart viele kleine `#if`-Blöcke und macht den Code lesbarer |
 | Lage beim Einmessen (REQ-005) | Lage jeder IMU von Schritt 1 bis zum Abschluss mit ihrem Gyro weiterdrehen (auch im Warte-Zustand und in Schritt 2), Schwerkraft zieht jede IMU einzeln zurecht (0,8 1/s) und führt den Gyro-Fehler nach (0,05 1/s²) | Bis 60 s ohne Referenz-Lage dazwischen: ohne Stütze würde der Gyro-Fehler mehrere Grad aufsummieren. Der Arm muss bei der Bestätigung nicht in der Referenz-Lage sein. Keine neue Bibliothek. |
 | Einordnen in Schritt 2 (REQ-005) | Handdrehung = Unterarm-IMU dreht vor allem um die Schwerkraft-Richtung aus Schritt 1 (Cosinus ≥ 0,8) und der Oberarm dreht höchstens halb so schnell. Messungen mit deutlicher Drehung um diese Richtung (> 60 % und > 3 °/s) kommen nicht in die Achsen-Suche | Die Achsen-Suche erlaubt nur eine Drehachse. Annahme nur zum Einordnen: Unterarm hing in Schritt 1 höchstens 30° schief (REQ-005, Physik-Annahmen) |
 | Serieller Monitor, Eingabe (REQ-004) | Pro `loop()` höchstens 64 Zeichen lesen (Empfangspuffer), nur `' '`, `'\n'`, `'\r'` zählen | B-1, B-7: kein `String`, kein eigener Puffer, nie warten |
@@ -71,9 +71,12 @@ Keine neue Bibliothek. Es wird nur `math.h` aus dem Arduino-Core (avr-libc) benu
 
 | Werkzeug | Version | Wozu |
 |---|---|---|
-| `g++` oder `clang++` (C++-Compiler für den PC) | `TODO` | Logik-Tests und Fuzz-Tests (`docs/tests/logik/`) |
-| `cppcheck` | `TODO` | Code-Scanner für typische Sicherheitsfehler |
-| Python | 3.x | Szenarien erzeugen (`docs/tests/szenarien/`), Tests starten |
-| `wokwi-cli` | `TODO` | Wokwi-Simulation von der Kommandozeile (`docs/wokwi/`), braucht Token |
+| `g++` oder `clang++` (C++-Compiler für den PC) | `clang++` `22.1.8` (MSYS2, Windows ARM64; `g++` auf diesem PC nicht installiert) | Logik-Tests und Fuzz-Tests (`docs/tests/logik/`) |
+| `cppcheck` | `2.22.0` | Code-Scanner für typische Sicherheitsfehler |
+| Python | `3.11.9` | Szenarien erzeugen (`docs/tests/szenarien/`), Tests starten |
+| `node` (Node.js) | `24.15.0` | GUI-Vergleich in den Tests (`tools/gui/jointsense_live.html` vorher/nachher, seit REQ-007) |
+| `wokwi-cli` | `0.29.1` | Wokwi-Simulation von der Kommandozeile (`docs/wokwi/`), braucht Token |
+
+Die Versionen oben wurden am 2026-11-13 auf einem Team-PC (Windows ARM64) mit `--version` gemessen. Auf anderen PCs können sie abweichen.
 
 Ob alles installiert ist, prüft der Skill `/einrichten`.

@@ -30,4 +30,4 @@ Status-Werte: *offen* (noch nicht geprüft), *geschützt*, *nicht geschützt*, *
 
 ## Neue Bedrohung eintragen
 
-Nächste freie ID nehmen (B-6, B-7, …) und eine Zeile ergänzen. In der Anforderung (`REQ-xxx.md`, Abschnitt «Bedrohungen») auf die ID verweisen.
+Nächste freie ID nehmen (zurzeit B-8) und eine Zeile ergänzen. In der Anforderung (`REQ-xxx.md`, Abschnitt «Bedrohungen») auf die ID verweisen.
