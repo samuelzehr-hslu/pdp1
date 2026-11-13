@@ -101,8 +101,8 @@ struct FehlerMusterZustand {
 #define EINMESSEN_GRUND_OBERARM 4   // Scharnier-Achse nicht eindeutig (z. B. Oberarm still)
 #define EINMESSEN_GRUND_HAND    5   // Knochenachse des Unterarms nicht sicher bestimmt (Hand nicht gedreht)
 #define EINMESSEN_GRUND_BESTAETIGUNG 6  // Wartezeit abgelaufen, keine Bestätigung (REQ-004).
-                                        // Diesen Grund gibt jointsense.ino selbst an die Meldung weiter,
-                                        // einmessenGrund() liefert ihn nie.
+                                        // Die Logik setzt diesen Grund nie selbst: jointsense.ino gibt
+                                        // ihn beim Abbruch an einmessenAbbrechen() mit.
 
 // Ab diesen Werten ist der Fortschritt in Schritt 2 "OK" (AK-8, gleiche Grenzen wie REQ-002).
 #define EINMESSEN_BEUGUNG_MIN 30.0f  // Grad: Spannweite der Beugung
@@ -147,9 +147,9 @@ struct EllbogenZustand {
   float rate1[3];           // letzte Drehgeschwindigkeit IMU 1 (ohne Fehler, rad/s)
   float rate2[3];           // letzte Drehgeschwindigkeit IMU 2
   float winkel;             // Ellbogenwinkel minus Referenz in Grad (positiv = Überstreckung)
-  float ruheZeit;           // wie lange (s) ruhen beide IMUs schon?
+  float ruheZeit;           // zurzeit nicht benutzt (wird nur auf 0 gesetzt), bleibt wegen der Schnittstelle
   float lageZeit;           // wie lange (s) ist die Lage schon unbekannt?
-  float lageLetzter;        // letzter Winkel aus der Schwerkraft (zum Wiederfinden der Lage)
+  float lageLetzter;        // zurzeit nicht benutzt (wird nur auf 0 gesetzt), bleibt wegen der Schnittstelle
   float drehungLetzte;      // Verdrehung des Unterarms um seine Achse vor dem Ausfall (Grad)
 
   // ----- Einmessen (Sammelfächer, nur während dem Einmessen gebraucht) -----
@@ -288,7 +288,7 @@ void einmessenAbbrechen(EllbogenZustand &z, uint8_t grund);
 uint8_t einmessenFehlenderGrund(const EllbogenZustand &z);
 
 // Sagt, warum das letzte Einmessen abgebrochen wurde (EINMESSEN_GRUND_...).
-// Nur für die Meldung im Seriellen Monitor.
+// jointsense.ino braucht diese Funktion zurzeit nicht (sie kennt den Grund schon beim Abbruch).
 uint8_t einmessenGrund(const EllbogenZustand &z);
 
 // true, wenn Referenz, Achse UND Lage bekannt sind.

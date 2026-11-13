@@ -1,26 +1,42 @@
 // logik.cpp
 // Hier steht, WIE die Funktionen aus logik.h arbeiten.
 // Keine Arduino-Befehle in dieser Datei (siehe Erklärung in logik.h).
+// Die Erklärung der Ein- und Ausgaben jeder öffentlichen Funktion steht in logik.h.
+//
+// Aufbau dieser Datei:
+//   1. Einfache Funktionen: Neigung, Grenzwert, Taste, Ausfall, Fehlermuster
+//   2. Winkelmessung (REQ-002): Einstellungen, kleine Rechen-Helfer (Vektoren, Quaternionen),
+//      laufende Messung
+//   3. Einmessen (REQ-005): Schritt 1 still, Warte-Zustand, Schritt 2 frei bewegen, Achsen-Suche
+//   4. Die Funktionen aus logik.h für Winkelmessung und Einmessen
+//   5. Bestätigung beim Einmessen (REQ-004)
 
 #include <math.h>
+#include <stddef.h>   // für size_t
 #include "logik.h"
+
+// Die Hilfsfunktionen sollen nicht in jede Stelle hineinkopiert werden (spart Platz im Flash des Arduino).
+#define NICHT_INLINE __attribute__((noinline))
 
 // Die Kreiszahl Pi. Eigener Name, weil Arduino schon ein "PI" hat
 // und wir diese Datei auch ohne Arduino benutzen wollen.
 const double LOGIK_PI = 3.1415926535897932384626433832795;
 
 
+// Neigung einer IMU in Grad aus der Beschleunigung (siehe logik.h).
 float neigungAusBeschleunigung(float x, float y, float z) {
   float neigung = atan2(x, sqrt(y * y + z * z)) * 180.0 / LOGIK_PI;
   return neigung;
 }
 
 
+// Ellbogenwinkel = Neigung Unterarm - Neigung Oberarm (siehe logik.h).
 float ellbogenWinkel(float neigungOberarm, float neigungUnterarm) {
   return neigungUnterarm - neigungOberarm;
 }
 
 
+// Mittelwert summe / anzahl, ohne durch 0 zu teilen (siehe logik.h).
 float referenzBerechnen(float summe, int anzahl) {
   if (anzahl <= 0) {
     return 0.0;                       // nie durch 0 teilen
@@ -29,6 +45,7 @@ float referenzBerechnen(float summe, int anzahl) {
 }
 
 
+// Grenzwert mit Hysterese und Entprellung: true = Motor soll vibrieren (siehe logik.h).
 bool grenzwertPruefen(GrenzwertZustand &zustand, float abweichungGrad, uint32_t jetztMs,
                       float grenzwertGrad, float hystereseGrad, uint32_t entprellMs) {
   // Sicherheit (fail-safe): Kein gültiger Wert -> Motor aus.
@@ -68,6 +85,7 @@ bool grenzwertPruefen(GrenzwertZustand &zustand, float abweichungGrad, uint32_t 
 }
 
 
+// true, wenn die Taste gerade eben neu gedrückt wurde, entprellt (siehe logik.h).
 bool tasteNeuGedrueckt(TasteZustand &zustand, bool istGedrueckt, uint32_t jetztMs,
                        uint32_t prellMs) {
   if (istGedrueckt == zustand.warGedrueckt) {
@@ -82,6 +100,7 @@ bool tasteNeuGedrueckt(TasteZustand &zustand, bool istGedrueckt, uint32_t jetztM
 }
 
 
+// Zählt Fehlschläge einer IMU und merkt, ob sie ausgefallen ist (siehe logik.h).
 bool imuStatusAktualisieren(ImuStatus &status, bool messungOk, uint8_t schwelleFehler) {
   if (messungOk) {
     status.fehlerInFolge = 0;         // Messung hat geklappt: alles wieder gut
@@ -101,6 +120,7 @@ bool imuStatusAktualisieren(ImuStatus &status, bool messungOk, uint8_t schwelleF
 }
 
 
+// Fehlermuster bei Ausfall: 3 kurze Stösse alle 5 s (siehe logik.h).
 bool fehlerMusterMotorAn(FehlerMusterZustand &zustand, bool ausfall, uint32_t jetztMs) {
   if (!ausfall) {
     zustand.aktiv = false;            // kein Ausfall: Muster zurücksetzen, Motor nicht wegen Fehler
@@ -131,6 +151,7 @@ bool fehlerMusterMotorAn(FehlerMusterZustand &zustand, bool ausfall, uint32_t je
 }
 
 
+// Entscheidet, ob der Motor vibrieren soll; Ausfall hat Vorrang (siehe logik.h).
 bool motorSollAn(bool sensorAusfall, bool zuWeit, bool fehlerMusterAn) {
   if (sensorAusfall) {
     return fehlerMusterAn;            // Ausfall hat Vorrang: Überstreckung wird ignoriert
@@ -149,11 +170,6 @@ bool motorSollAn(bool sensorAusfall, bool zuWeit, bool fehlerMusterAn) {
 //   knochen2   = Knochenachse des Unterarms (in den Achsen von IMU 2). Drehen des Unterarms
 //                (Hand drehen) dreht die IMU 2 genau um diese Achse.
 //   Ellbogenwinkel = Drehung der Knochenachse des Unterarms um die Scharnier-Achse.
-
-#include <stddef.h>   // für size_t
-
-// Die Hilfsfunktionen sollen nicht in jede Stelle hineinkopiert werden (spart Platz im Flash des Arduino).
-#define NICHT_INLINE __attribute__((noinline))
 
 // ---------- Einstellungen der Winkelmessung ----------
 static const float MAX_BESCHLEUNIGUNG   = 16.0f;   // g: mehr ist physikalisch unmöglich (AK-14)
@@ -386,6 +402,27 @@ NICHT_INLINE static void relativDrehen(float *q, const float *r1, const float *r
   qNormieren(q);
 }
 
+// Dreht die Drehung q zusätzlich um den Drehvektor phi (von links: q = Drehung(phi) * q).
+// So zieht die Schwerkraft eine Drehung ein kleines Stück zurecht.
+NICHT_INLINE static void qVorneDrehen(const float *phi, float *q) {
+  float dq[4];
+  float tq[4];
+  qAusDrehvektor(phi, dq);
+  qMal(dq, q, tq);
+  for (int i = 0; i < 4; i++) {
+    q[i] = tq[i];
+  }
+  qNormieren(q);
+}
+
+// Gibt den Wert zurück, aber höchstens 1 (für die Stärke einer Korrektur pro Messschritt).
+NICHT_INLINE static float hoechstensEins(float wert) {
+  if (wert > 1.0f) {
+    wert = 1.0f;
+  }
+  return wert;
+}
+
 // ---------- Winkel aus der Lage ----------
 
 // Rechnet den Ellbogenwinkel (Grad) aus der relativen Drehung q.
@@ -447,14 +484,8 @@ NICHT_INLINE static void schwerkraftKorrektur(EllbogenZustand &z, const float *a
     }
   }
 
-  float k = KORREKTUR_RATE * dt;
-  float kh = KORREKTUR_RATE_SCHARNIER * dt;
-  if (k > 1.0f) {
-    k = 1.0f;
-  }
-  if (kh > 1.0f) {
-    kh = 1.0f;
-  }
+  float k = hoechstensEins(KORREKTUR_RATE * dt);
+  float kh = hoechstensEins(KORREKTUR_RATE_SCHARNIER * dt);
   // Gyro-Fehler nachführen: b1 += c/2, b2 -= R^T c / 2 mit c = KI * (e + eh) (in Grad/s)
   float ki = BIAS_LERNRATE * dt * RAD_ZU_GRAD * 0.5f;
   float gesamt[3];
@@ -473,14 +504,7 @@ NICHT_INLINE static void schwerkraftKorrektur(EllbogenZustand &z, const float *a
   for (int i = 0; i < 3; i++) {
     phi[i] = k * e[i] + kh * eh[i];
   }
-  float dq[4];
-  float tq[4];
-  qAusDrehvektor(phi, dq);
-  qMal(dq, z.q, tq);
-  for (int i = 0; i < 4; i++) {
-    z.q[i] = tq[i];
-  }
-  qNormieren(z.q);
+  qVorneDrehen(phi, z.q);
 }
 
 // Versucht, die Lage nur aus der Schwerkraft zu finden (nach einem Ausfall).
@@ -533,6 +557,49 @@ NICHT_INLINE static bool lageAusSchwerkraft(const EllbogenZustand &z, const floa
   return true;
 }
 
+// Lage wiederfinden (nach einem Ausfall): die Schwerkraft sagt uns den Winkel.
+// Beim ersten brauchbaren Wert wird die Drehung neu gesetzt. Danach läuft die normale Messung weiter
+// (Gyro und Schwerkraft), bis LAGE_MIN_ANZAHL Messungen in Folge dazu passen. So mittelt sich das Rauschen weg.
+// Spätestens nach LAGE_MAX_ZEIT gilt die Lage wieder als bekannt (AK-13).
+//   a1n, a2n     : Schwerkraft-Richtung (Länge 1) von IMU 1 und IMU 2, nur gültig mit schwerkraftOk
+//   schwerkraftOk: true = bei beiden IMUs ist der Betrag der Beschleunigung nahe 1 g
+static void lageWiederfinden(EllbogenZustand &z, const float *a1n, const float *a2n, bool schwerkraftOk,
+                             float dt) {
+  z.lageZeit += dt;
+  bool passt = false;
+  if (schwerkraftOk) {
+    float winkelS = 0.0f;
+    float qNeu[4];
+    if (lageAusSchwerkraft(z, a1n, a2n, winkelS, qNeu)) {
+      float jetzt = 0.0f;
+      bool hatWinkel = winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, jetzt);
+      if (z.lageAnzahl == 0 || !hatWinkel || fabsf(winkelKuerzen(winkelS - jetzt)) > 3.0f) {
+        for (int i = 0; i < 4; i++) {
+          z.q[i] = qNeu[i];               // Start (oder die Werte sind weggelaufen): neu setzen
+        }
+        z.lageAnzahl = 0;
+      }
+      passt = true;
+    }
+    schwerkraftKorrektur(z, a1n, a2n, dt);
+  }
+  if (passt) {
+    if (z.lageAnzahl < 255) {
+      z.lageAnzahl = z.lageAnzahl + 1;
+    }
+  } else {
+    z.lageAnzahl = 0;
+  }
+  float w = 0.0f;
+  bool ok = winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, w);
+  if (ok && (z.lageAnzahl >= LAGE_MIN_ANZAHL || z.lageZeit >= LAGE_MAX_ZEIT)) {
+    // Gefunden (oder nichts Besseres da: dann gilt die mit den Gyros weitergeführte Drehung)
+    z.winkel = w;
+    z.lageBekannt = true;
+    z.lageAnzahl = 0;
+  }
+}
+
 // Führt die Winkelmessung um einen Messzyklus nach (mit eingemessener Achse).
 NICHT_INLINE static void laufendNachfuehren(EllbogenZustand &z, const float *a1, const float *a2,
                                const float *w1, const float *w2, float dt) {
@@ -576,42 +643,7 @@ NICHT_INLINE static void laufendNachfuehren(EllbogenZustand &z, const float *a1,
   }
 
   if (!z.lageBekannt) {
-    // Lage wiederfinden (nach einem Ausfall): die Schwerkraft sagt uns den Winkel.
-    // Beim ersten brauchbaren Wert wird die Drehung neu gesetzt. Danach läuft die normale Messung weiter
-    // (Gyro und Schwerkraft), bis LAGE_MIN_ANZAHL Messungen in Folge dazu passen. So mittelt sich das Rauschen weg.
-    z.lageZeit += dt;
-    bool passt = false;
-    if (schwerkraftOk) {
-      float winkelS = 0.0f;
-      float qNeu[4];
-      if (lageAusSchwerkraft(z, a1n, a2n, winkelS, qNeu)) {
-        float jetzt = 0.0f;
-        bool hatWinkel = winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, jetzt);
-        if (z.lageAnzahl == 0 || !hatWinkel || fabsf(winkelKuerzen(winkelS - jetzt)) > 3.0f) {
-          for (int i = 0; i < 4; i++) {
-            z.q[i] = qNeu[i];             // Start (oder die Werte sind weggelaufen): neu setzen
-          }
-          z.lageAnzahl = 0;
-        }
-        passt = true;
-      }
-      schwerkraftKorrektur(z, a1n, a2n, dt);
-    }
-    if (passt) {
-      if (z.lageAnzahl < 255) {
-        z.lageAnzahl = z.lageAnzahl + 1;
-      }
-    } else {
-      z.lageAnzahl = 0;
-    }
-    float w = 0.0f;
-    bool ok = winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, w);
-    if (ok && (z.lageAnzahl >= LAGE_MIN_ANZAHL || z.lageZeit >= LAGE_MAX_ZEIT)) {
-      // Gefunden (oder nichts Besseres da: dann gilt die mit den Gyros weitergeführte Drehung)
-      z.winkel = w;
-      z.lageBekannt = true;
-      z.lageAnzahl = 0;
-    }
+    lageWiederfinden(z, a1n, a2n, schwerkraftOk, dt);   // nach einem Ausfall
     return;
   }
 
@@ -753,10 +785,7 @@ NICHT_INLINE static bool lageStuetzen(EllbogenZustand &z, const float *a1, const
                                       const float *w1, const float *w2, float dt,
                                       float r[2][3], float g[2][3]) {
   lagenWeiterdrehen(z, w1, w2, dt, r);
-  float k = KORREKTUR_RATE * dt;
-  if (k > 1.0f) {
-    k = 1.0f;
-  }
+  float k = hoechstensEins(KORREKTUR_RATE * dt);
   const float *a[2] = {a1, a2};
   const float *soll[2] = {z.summeA1, z.summeA2};
   bool beideOk = true;
@@ -786,14 +815,7 @@ NICHT_INLINE static bool lageStuetzen(EllbogenZustand &z, const float *a1, const
       bias[i] -= ki * rt[i];
       e[i] *= k;
     }
-    float dq[4];
-    float tq[4];
-    qAusDrehvektor(e, dq);
-    qMal(dq, z.lage[u], tq);
-    for (int i = 0; i < 4; i++) {
-      z.lage[u][i] = tq[i];
-    }
-    qNormieren(z.lage[u]);
+    qVorneDrehen(e, z.lage[u]);
   }
   return beideOk;
 }
@@ -848,6 +870,34 @@ NICHT_INLINE static uint8_t grenzenMerken(float wert, float &kleinster, float &g
     return 2;
   }
   return 0;
+}
+
+// Schritt 2: Sammelt aus einer Messung die Daten für die Suche der Scharnier-Achse (in matrixM).
+// Die Scharnier-Achse j1 (in den Achsen von IMU 1) und j2 (in den Achsen von IMU 2) sind gesucht.
+// Beide sehen entlang der Scharnier-Achse gleich viel Schwerkraft (A) und gleich viel Änderung davon (B):
+//   A: g1.j1 - g2.j2 = 0            B: (w1 x g1).j1 - (w2 x g2).j2 = 0
+// Jede Messung ergibt zwei Zeilen p (6 Zahlen) mit p.x = 0 für x = (j1, j2).
+//   r: Drehgeschwindigkeit beider IMUs ohne Gyro-Fehler (rad/s), g: Schwerkraft-Richtung (Länge 1)
+static void scharnierDatenSammeln(EllbogenZustand &z, float r[2][3], float g[2][3]) {
+  float pA[6];
+  float pB[6];
+  float tempo2Summe = 0.0f;               // (rad/s)^2
+  for (int u = 0; u < 2; u++) {
+    float vorz = (u == 0) ? 1.0f : -1.0f;
+    float y[3];
+    kreuz3(r[u], g[u], y);
+    tempo2Summe += punkt3(r[u], r[u]);
+    for (int i = 0; i < 3; i++) {
+      pA[3 * u + i] = vorz * g[u][i];
+      pB[3 * u + i] = vorz * y[i];
+    }
+  }
+  float wB = 1.0f / (2.0e-4f * tempo2Summe + 1.0e-5f);
+  matrixZaehlen(z.matrixM, 6, pA, GEWICHT_SCHWERKRAFT);
+  matrixZaehlen(z.matrixM, 6, pB, wB);
+  if (z.anzahlG < 65535) {
+    z.anzahlG = z.anzahlG + 1;
+  }
 }
 
 // Schritt 2 (frei bewegen), ein Messzyklus:
@@ -934,29 +984,7 @@ NICHT_INLINE static void freiSammeln(EllbogenZustand &z, const float *a1, const 
   if (!schwerkraftOk) {
     return;
   }
-  // Die Scharnier-Achse j1 (in den Achsen von IMU 1) und j2 (in den Achsen von IMU 2) sind gesucht.
-  // Beide sehen entlang der Scharnier-Achse gleich viel Schwerkraft (A) und gleich viel Änderung davon (B):
-  //   A: g1.j1 - g2.j2 = 0            B: (w1 x g1).j1 - (w2 x g2).j2 = 0
-  // Jede Messung ergibt zwei Zeilen p (6 Zahlen) mit p.x = 0 für x = (j1, j2).
-  float pA[6];
-  float pB[6];
-  float tempo2Summe = 0.0f;               // (rad/s)^2
-  for (int u = 0; u < 2; u++) {
-    float vorz = (u == 0) ? 1.0f : -1.0f;
-    float y[3];
-    kreuz3(r[u], g[u], y);
-    tempo2Summe += punkt3(r[u], r[u]);
-    for (int i = 0; i < 3; i++) {
-      pA[3 * u + i] = vorz * g[u][i];
-      pB[3 * u + i] = vorz * y[i];
-    }
-  }
-  float wB = 1.0f / (2.0e-4f * tempo2Summe + 1.0e-5f);
-  matrixZaehlen(z.matrixM, 6, pA, GEWICHT_SCHWERKRAFT);
-  matrixZaehlen(z.matrixM, 6, pB, wB);
-  if (z.anzahlG < 65535) {
-    z.anzahlG = z.anzahlG + 1;
-  }
+  scharnierDatenSammeln(z, r, g);
 }
 
 // Dreht zwei Reihen x und y (je 6 Zahlen im Abstand "schritt": 1 = Zeile, 6 = Spalte einer 6x6-Matrix)
@@ -1257,8 +1285,59 @@ NICHT_INLINE static float oberarmGrad(const EllbogenZustand &z) {
 }
 
 
+// Knochenachse des Unterarms aus der Handdrehung (Summe der Drehachse in dreh[3..5]).
+// Nur wenn die Hand weit genug gedreht wurde (DREH_MIN_WEG). f2 bekommt die Achse (Länge 1).
+// Rückgabe: true = f2 ist brauchbar.
+static bool knochenachseAusHand(const EllbogenZustand &z, float *f2) {
+  bool handOk = false;
+  if (z.dreh[7] >= DREH_MIN_WEG) {
+    for (int i = 0; i < 3; i++) {
+      f2[i] = z.dreh[3 + i];
+    }
+    handOk = normieren3(f2);
+  }
+  return handOk;
+}
+
+// Wird nach einem erfolgreichen Einmessen aufgerufen: übernimmt das neue Modell m als Referenz und Achse,
+// setzt die jetzige Lage und beendet das Einmessen.
+// Vorzeichen: Die grössere Auslenkung von der Referenz ist die Beugung (soll negativ sein).
+static void modellUebernehmen(EllbogenZustand &z, const EinmessModell &m) {
+  bool umkehren = (z.beugMax > -z.beugMin);
+  float vorz = umkehren ? -1.0f : 1.0f;   // beide Achsen kippen zusammen: qRef bleibt gleich
+  float qC[4];
+  paarDrehung(z.lage[0], z.lage[1], m.qRef, qC);   // jetzige Lage, seit der Referenz-Lage weitergeführt
+  for (int i = 0; i < 3; i++) {
+    z.achse1[i] = vorz * m.j1[i];
+    z.knochen2[i] = m.f2[i];
+    z.knochen0[i] = m.w0[i];
+    z.bias1[i] = z.summeW1[i];
+    z.bias2[i] = z.summeW2[i];
+  }
+  for (int i = 0; i < 4; i++) {
+    z.qRef[i] = m.qRef[i];
+    z.q[i] = qC[i];
+  }
+  float winkelEnde = 0.0f;
+  if (!winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, winkelEnde)) {
+    winkelEnde = 0.0f;                    // (kann nicht vorkommen)
+  }
+  z.winkel = winkelEnde;
+  z.achseBekannt = true;
+  z.lageBekannt = true;
+  z.ratenGueltig = false;
+  z.lageZeit = 0.0f;
+  z.lageAnzahl = 0;
+  z.lageLetzter = 0.0f;
+  z.drehungLetzte = 0.0f;
+  z.grund = EINMESSEN_GRUND_KEINER;
+  z.phase = 0;                            // Einmessen beendet
+}
+
+
 // ---------- Funktionen aus logik.h ----------
 
+// Löscht alles: keine Referenz, keine Achse, keine Lage (siehe logik.h).
 void ellbogenZuruecksetzen(EllbogenZustand &z) {
   // Jedes Byte auf 0 setzen: ergibt überall 0 bzw. false
   uint8_t *bytes = reinterpret_cast<uint8_t *>(&z);
@@ -1267,6 +1346,7 @@ void ellbogenZuruecksetzen(EllbogenZustand &z) {
   }
 }
 
+// Verarbeitet EINEN Messzyklus: prüfen, beim Einmessen sammeln, Winkel nachführen (siehe logik.h).
 bool ellbogenAktualisieren(EllbogenZustand &z, const ImuMessung &oberarm,
                            const ImuMessung &unterarm, float dtSekunden) {
   // 1. Alles prüfen, bevor etwas verändert wird (fail-safe, B-2)
@@ -1306,16 +1386,19 @@ bool ellbogenAktualisieren(EllbogenZustand &z, const ImuMessung &oberarm,
   return true;
 }
 
+// Beginnt Schritt 1 (still) des Einmessens (siehe logik.h).
 void einmessenStart(EllbogenZustand &z) {
   z.phase = PHASE_STILL;
   z.grund = EINMESSEN_GRUND_KEINER;
   stillZuruecksetzen(z);
 }
 
+// true, sobald Schritt 1 fertig ist (Warte-Zustand oder schon Schritt 2) (siehe logik.h).
 bool einmessenStillFertig(const EllbogenZustand &z) {
   return z.phase == PHASE_WARTEN || z.phase == PHASE_FREI;
 }
 
+// Beginnt Schritt 2 (frei bewegen) nach der Bestätigung (siehe logik.h).
 void einmessenBewegungStart(EllbogenZustand &z) {
   if (z.phase != PHASE_WARTEN) {
     return;                               // ohne fertigen Schritt 1 gibt es keinen Schritt 2
@@ -1347,6 +1430,7 @@ void einmessenBewegungStart(EllbogenZustand &z) {
   }
 }
 
+// Füllt f mit den Zahlen für die Fortschritts-Anzeige (siehe logik.h).
 void einmessenFortschritt(const EllbogenZustand &z, EinmessFortschritt &f) {
   f.ruhigSekunden = 0.0f;
   f.beugungGrad = 0.0f;
@@ -1363,6 +1447,7 @@ void einmessenFortschritt(const EllbogenZustand &z, EinmessFortschritt &f) {
   }
 }
 
+// Der erste noch nicht erfüllte Wert in Schritt 2, oder EINMESSEN_GRUND_KEINER (siehe logik.h).
 uint8_t einmessenFehlenderGrund(const EllbogenZustand &z) {
   // Beugung: Anzeige-Wert zu klein, oder (mit eindeutiger Achse) die ECHTE Spannweite zu klein.
   // Für den Erfolg zählt immer die echte Spannweite, nie nur die vorläufige Schätzung (B-6).
@@ -1383,6 +1468,8 @@ uint8_t einmessenFehlenderGrund(const EllbogenZustand &z) {
   return EINMESSEN_GRUND_KEINER;
 }
 
+// Einmal pro Sekunde in Schritt 2: Achse suchen, Fortschritt rechnen, wenn alles reicht abschliessen
+// (siehe logik.h).
 bool einmessenAbschliessen(EllbogenZustand &z) {
   if (z.phase != PHASE_FREI) {
     return false;                         // Schritt 2 läuft nicht
@@ -1390,13 +1477,7 @@ bool einmessenAbschliessen(EllbogenZustand &z) {
 
   // 1. Knochenachse des Unterarms aus der Handdrehung
   float f2[3] = {0.0f, 0.0f, 0.0f};
-  bool handOk = false;
-  if (z.dreh[7] >= DREH_MIN_WEG) {
-    for (int i = 0; i < 3; i++) {
-      f2[i] = z.dreh[3 + i];
-    }
-    handOk = normieren3(f2);
-  }
+  bool handOk = knochenachseAusHand(z, f2);
 
   // 2. Scharnier-Achse suchen und das (vorläufige) Modell bauen
   float x[6];
@@ -1449,49 +1530,23 @@ bool einmessenAbschliessen(EllbogenZustand &z) {
     return false;
   }
 
-  // 6. Neues Modell übernehmen (erst jetzt, damit sonst alles beim Alten bleibt).
-  //    Vorzeichen: Die grössere Auslenkung von der Referenz ist die Beugung (soll negativ sein).
-  bool umkehren = (z.beugMax > -z.beugMin);
-  float vorz = umkehren ? -1.0f : 1.0f;   // beide Achsen kippen zusammen: qRef bleibt gleich
-  float qC[4];
-  paarDrehung(z.lage[0], z.lage[1], m.qRef, qC);   // jetzige Lage, seit der Referenz-Lage weitergeführt
-  for (int i = 0; i < 3; i++) {
-    z.achse1[i] = vorz * m.j1[i];
-    z.knochen2[i] = m.f2[i];
-    z.knochen0[i] = m.w0[i];
-    z.bias1[i] = z.summeW1[i];
-    z.bias2[i] = z.summeW2[i];
-  }
-  for (int i = 0; i < 4; i++) {
-    z.qRef[i] = m.qRef[i];
-    z.q[i] = qC[i];
-  }
-  float winkelEnde = 0.0f;
-  if (!winkelAusLage(z.q, z.achse1, z.knochen2, z.knochen0, winkelEnde)) {
-    winkelEnde = 0.0f;                    // (kann nicht vorkommen)
-  }
-  z.winkel = winkelEnde;
-  z.achseBekannt = true;
-  z.lageBekannt = true;
-  z.ratenGueltig = false;
-  z.lageZeit = 0.0f;
-  z.lageAnzahl = 0;
-  z.lageLetzter = 0.0f;
-  z.drehungLetzte = 0.0f;
-  z.grund = EINMESSEN_GRUND_KEINER;
-  z.phase = 0;                            // Einmessen beendet
+  // 6. Neues Modell übernehmen (erst jetzt, damit sonst alles beim Alten bleibt)
+  modellUebernehmen(z, m);
   return true;
 }
 
+// Bricht ein laufendes Einmessen ab. Referenz und Achse bleiben (siehe logik.h).
 void einmessenAbbrechen(EllbogenZustand &z, uint8_t grund) {
   z.grund = grund;                        // für einmessenGrund()
   z.phase = 0;                            // Referenz und Achse bleiben wie sie waren
 }
 
+// Warum wurde das letzte Einmessen abgebrochen? (siehe logik.h)
 uint8_t einmessenGrund(const EllbogenZustand &z) {
   return z.grund;
 }
 
+// Gibt den Winkel gegenüber der Referenz, wenn Referenz, Achse und Lage bekannt sind (siehe logik.h).
 bool ellbogenAbweichung(const EllbogenZustand &z, float &abweichungGrad) {
   if (!z.achseBekannt || !z.lageBekannt) {
     return false;
@@ -1503,6 +1558,7 @@ bool ellbogenAbweichung(const EllbogenZustand &z, float &abweichungGrad) {
   return true;
 }
 
+// Nach einem IMU-Ausfall: die Lage gilt als unbekannt, Referenz und Achse bleiben (siehe logik.h).
 void ellbogenLageVerwerfen(EllbogenZustand &z) {
   if (z.achseBekannt && z.lageBekannt) {
     // Verdrehung des Unterarms um seine Achse merken (wird nach dem Ausfall als unverändert angenommen).
@@ -1530,11 +1586,13 @@ void ellbogenLageVerwerfen(EllbogenZustand &z) {
 
 // ---------- Bestätigung beim Einmessen (REQ-004) ----------
 
+// true für Leerzeichen, Zeilenende und Wagenrücklauf (siehe logik.h).
 bool istBestaetigungsZeichen(char zeichen) {
   // Nur diese drei Zeichen zählen. Alles andere wird ohne Wirkung verworfen (B-1, B-7).
   return zeichen == ' ' || zeichen == '\n' || zeichen == '\r';
 }
 
+// true, wenn seit wartenSeitMs mindestens maxMs vergangen sind, auch beim Überlauf (siehe logik.h).
 bool wartezeitAbgelaufen(unsigned long wartenSeitMs, unsigned long jetztMs, unsigned long maxMs) {
   // Rechnen mit 32-Bit-Zahlen ohne Vorzeichen (gleich wie millis() auf dem Arduino):
   // "jetzt - seit" stimmt dann auch, wenn millis() dazwischen übergelaufen ist.
