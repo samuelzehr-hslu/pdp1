@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JointSense Flex Live</title>
+<!-- Live-GUI für Prototyp 2 (Flex-Sensor, REQ-008).
+     Eine einzige Datei, läuft ohne Internet (keine Skripte oder Schriften aus dem Netz).
+     Braucht Chrome oder Edge (Web Serial). Anleitung: README.md im selben Ordner. -->
+<style>
+  :root {
+    --hintergrund: #f6f7f9;
+    --karte: #ffffff;
+    --text: #1d2330;
+    --text-leise: #5f6b7a;
+    --rand: #d9dee5;
+    --linie: #2463eb;
+    --grenze: #d93025;
+    --raster: #e6e9ee;
+    --gut: #188038;
+    --warnung: #d93025;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --hintergrund: #14171c;
+      --karte: #1d2128;
+      --text: #e7eaf0;
+      --text-leise: #9aa4b2;
+      --rand: #333a45;
+      --linie: #6c9cff;
+      --grenze: #ff6b5e;
+      --raster: #2a3039;
+      --gut: #4cc76e;
+      --warnung: #ff6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--hintergrund);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button {
+    font: inherit;
+    padding: 8px 16px;
+    border: 1px solid var(--rand);
+    border-radius: 6px;
+    background: var(--karte);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .werte {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .karte {
+    background: var(--karte);
+    border: 1px solid var(--rand);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .name { font-size: 0.8rem; color: var(--text-leise); }
+  .wert { font-size: 1.4rem; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .motor-an { color: var(--warnung); font-weight: 600; }
+  canvas { width: 100%; height: 300px; display: block; }
+  #meldung, #ereignis { color: var(--text-leise); font-size: 0.9rem; margin: 8px 0 0; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<h1>JointSense Prototyp 2 (Flex) – Live</h1>
+
+<div class="knoepfe">
+  <button id="knopfVerbinden">Verbinden</button>
+  <button id="knopfEinmessen" disabled>Einmessen</button>
+</div>
+
+<div class="werte">
+  <div class="karte"><div class="name">Zustand</div><div class="wert" id="anzeigeZustand">–</div></div>
+  <div class="karte"><div class="name">Motor</div><div class="wert" id="anzeigeMotor">–</div></div>
+  <div class="karte"><div class="name">Abweichung</div><div class="wert" id="anzeigeAbweichung">–</div></div>
+  <div class="karte"><div class="name">Widerstand</div><div class="wert" id="anzeigeWiderstand">–</div></div>
+  <div class="karte"><div class="name">ADC-Rohwert</div><div class="wert" id="anzeigeAdc">–</div></div>
+  <div class="karte"><div class="name">Datenrate (Zeilen/s)</div><div class="wert" id="anzeigeRate">0</div></div>
+</div>
+
+<div class="karte">
+  <div class="name">Abweichung in % (letzte 10 s), rote Linie = Grenzwert. Positiv = Richtung Überstreckung.</div>
+  <canvas id="verlauf"></canvas>
+</div>
+
+<p id="ereignis">Letztes Ereignis: –</p>
+<p id="meldung">Noch nicht verbunden. Knopf «Verbinden» drücken und den Feather auswählen.</p>
+
+<script>
+"use strict";
+
+// ---------- Einstellungen ----------
+const BAUDRATE = 115200;
+const VERLAUF_MS = 10000;          // so viel Zeit zeigt das Diagramm
+const MAX_ZEILENLAENGE = 200;      // längere Zeilen sind kaputt und werden verworfen
+const MAX_PUNKTE = 1000;           // Sicherheit: nie mehr Punkte speichern (50/s x 10 s = 500)
+
+// Zustandstexte (Nummern wie in der D-Zeile)
+const ZUSTANDSTEXTE = ["Keine Referenz", "Bereit", "Einmessen", "Sensor-Ausfall", "Motor-Ausfall"];
+
+// ---------- Daten ----------
+const daten = {
+  grenzwertProzent: 5.0,     // aus der G-Zeile
+  hystereseProzent: 1.0,
+  motorStaerke: 100,
+  adc: null,
+  widerstandOhm: null,
+  abweichungProzent: null,
+  motor: null,
+  zustand: null,
+  ereignis: "",
+  punkte: [],               // {zeitMs, abweichung} (zeitMs = Zeit vom Feather)
+  zeilenZeiten: []          // Empfangszeiten der D-Zeilen (für die Datenrate)
+};
+
+// Prüft, ob ein Text eine ganze Zahl ist (auch negativ). Gibt die Zahl oder null zurück.
+function ganzeZahl(text) {
+  if (typeof text !== "string" || !/^-?\d{1,10}$/.test(text)) {
+    return null;
+  }
+  const zahl = Number(text);
+  return Number.isSafeInteger(zahl) ? zahl : null;
+}
+
+// Verarbeitet eine Zeile vom Feather. Kaputte oder unbekannte Zeilen werden ignoriert.
+// Rückgabe: true, wenn die Zeile verstanden wurde.
+function zeileVerarbeiten(zeile, empfangMs) {
+  if (typeof zeile !== "string") return false;
+  zeile = zeile.replace(/\r$/, "");
+  if (zeile.length === 0 || zeile.length > MAX_ZEILENLAENGE) return false;
+  if (empfangMs === undefined) empfangMs = Date.now();
+
+  if (zeile.startsWith("E,")) {
+    daten.ereignis = zeile.slice(2, 62);
+    return true;
+  }
+
+  const teile = zeile.split(",");
+
+  if (teile[0] === "G" && teile.length === 4) {
+    const grenz = ganzeZahl(teile[1]);
+    const hyst = ganzeZahl(teile[2]);
+    const staerke = ganzeZahl(teile[3]);
+    if (grenz === null || hyst === null || staerke === null) return false;
+    if (grenz < 0 || grenz > 200 || hyst < 0 || hyst > 200 || staerke < 0 || staerke > 127) return false;
+    daten.grenzwertProzent = grenz / 10;
+    daten.hystereseProzent = hyst / 10;
+    daten.motorStaerke = staerke;
+    return true;
+  }
+
+  if (teile[0] === "D" && teile.length === 7) {
+    const zahlen = teile.slice(1).map(ganzeZahl);
+    if (zahlen.some(function (z) { return z === null; })) return false;
+    const [zeitMs, adc, widerstand, abwZehntel, motor, zustand] = zahlen;
+    if (zeitMs < 0 || adc < 0 || adc > 4095 || widerstand < 0) return false;
+    if (motor !== 0 && motor !== 1) return false;
+    if (zustand < 0 || zustand >= ZUSTANDSTEXTE.length) return false;
+
+    daten.adc = adc;
+    daten.widerstandOhm = widerstand;
+    daten.abweichungProzent = abwZehntel / 10;
+    daten.motor = motor;
+    daten.zustand = zustand;
+
+    // Feather neu gestartet (Zeit springt zurück)? Dann Verlauf leeren.
+    const letzter = daten.punkte[daten.punkte.length - 1];
+    if (letzter && zeitMs < letzter.zeitMs) daten.punkte = [];
+    daten.punkte.push({ zeitMs: zeitMs, abweichung: abwZehntel / 10 });
+    while (daten.punkte.length > MAX_PUNKTE ||
+           (daten.punkte.length > 0 && daten.punkte[0].zeitMs < zeitMs - VERLAUF_MS)) {
+      daten.punkte.shift();
+    }
+
+    daten.zeilenZeiten.push(empfangMs);
+    zeilenZeitenAufraeumen(empfangMs);
+    return true;
+  }
+
+  return false; // unbekannte Zeile
+}
+
+// Wirft Empfangszeiten weg, die älter als 1 s sind.
+function zeilenZeitenAufraeumen(jetztMs) {
+  while (daten.zeilenZeiten.length > 0 && daten.zeilenZeiten[0] < jetztMs - 1000) {
+    daten.zeilenZeiten.shift();
+  }
+  if (daten.zeilenZeiten.length > MAX_PUNKTE) {
+    daten.zeilenZeiten.splice(0, daten.zeilenZeiten.length - MAX_PUNKTE);
+  }
+}
+
+// Datenrate: D-Zeilen in der letzten Sekunde.
+function datenrate(jetztMs) {
+  zeilenZeitenAufraeumen(jetztMs);
+  return daten.zeilenZeiten.length;
+}
+
+// Widerstand in kΩ mit einer Nachkommastelle, z. B. 7300 -> "7.3 kΩ".
+function widerstandText(ohm) {
+  if (ohm === null) return "–";
+  return (ohm / 1000).toFixed(1) + " kΩ";
+}
+
+// Zustandsnummer -> Text.
+function zustandText(zustand) {
+  if (zustand === null || zustand < 0 || zustand >= ZUSTANDSTEXTE.length) return "–";
+  return ZUSTANDSTEXTE[zustand];
+}
+
+// Zerlegt ankommenden Text in Zeilen. Gibt den unfertigen Rest zurück.
+function textVerarbeiten(rest, neuerText) {
+  let puffer = rest + neuerText;
+  const zeilen = puffer.split("\n");
+  puffer = zeilen.pop();                 // letzte Zeile ist evtl. noch nicht fertig
+  for (const zeile of zeilen) zeileVerarbeiten(zeile);
+  if (puffer.length > MAX_ZEILENLAENGE) puffer = ""; // Unsinn ohne Zeilenende verwerfen
+  return puffer;
+}
+
+// Für die Tests auf dem PC (node). Im Browser passiert hier nichts.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { zeileVerarbeiten, textVerarbeiten, datenrate, widerstandText, zustandText, daten, ZUSTANDSTEXTE };
+}
+
+// ---------- Ab hier nur im Browser ----------
+if (typeof document !== "undefined") {
+  const knopfVerbinden = document.getElementById("knopfVerbinden");
+  const knopfEinmessen = document.getElementById("knopfEinmessen");
+  const meldung = document.getElementById("meldung");
+  const leinwand = document.getElementById("verlauf");
+  let port = null;
+  let schreiber = null;
+
+  // Text unten anzeigen.
+  function meldungZeigen(text) { meldung.textContent = text; }
+
+  // Port öffnen und Daten lesen, bis die Verbindung endet.
+  async function verbinden() {
+    if (!("serial" in navigator)) {
+      meldungZeigen("Dieser Browser kann kein Web Serial. Bitte Chrome oder Edge benutzen.");
+      return;
+    }
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: BAUDRATE });
+    } catch (fehler) {
+      meldungZeigen("Verbinden hat nicht geklappt: " + fehler.message);
+      port = null;
+      return;
+    }
+    schreiber = port.writable ? port.writable.getWriter() : null;
+    knopfVerbinden.disabled = true;
+    knopfEinmessen.disabled = schreiber === null;
+    meldungZeigen("Verbunden. Daten kommen …");
+    daten.punkte = [];
+
+    const decoder = new TextDecoder();
+    let rest = "";
+    while (port && port.readable) {
+      const leser = port.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await leser.read();
+          if (done) break;
+          if (value) rest = textVerarbeiten(rest, decoder.decode(value, { stream: true }));
+        }
+      } catch (fehler) {
+        meldungZeigen("Lesefehler: " + fehler.message + " (Kabel ab?)");
+        break;
+      } finally {
+        leser.releaseLock();
+      }
+    }
+    trennen();
+  }
+
+  // Aufräumen nach dem Ende der Verbindung.
+  async function trennen() {
+    try { if (schreiber) { schreiber.releaseLock(); } } catch (e) { /* egal */ }
+    try { if (port) { await port.close(); } } catch (e) { /* egal */ }
+    schreiber = null;
+    port = null;
+    knopfVerbinden.disabled = false;
+    knopfEinmessen.disabled = true;
+    meldungZeigen("Verbindung beendet. Zum Neu-Verbinden «Verbinden» drücken.");
+  }
+
+  // Knopf «Einmessen»: schickt genau ein Enter ("\n").
+  async function einmessen() {
+    if (!schreiber) return;
+    try {
+      await schreiber.write(new TextEncoder().encode("\n"));
+      meldungZeigen("Einmessen gestartet: Arm 2 s entspannt gestreckt und ruhig halten.");
+    } catch (fehler) {
+      meldungZeigen("Senden hat nicht geklappt: " + fehler.message);
+    }
+  }
+
+  knopfVerbinden.addEventListener("click", verbinden);
+  knopfEinmessen.addEventListener("click", einmessen);
+
+  // Farbe aus den CSS-Variablen holen (hell/dunkel).
+  function farbe(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // Zeichnet das Diagramm: Abweichung über die letzten 10 s und die Grenzwert-Linie.
+  function zeichnen() {
+    const breite = leinwand.clientWidth;
+    const hoehe = leinwand.clientHeight;
+    const faktor = window.devicePixelRatio || 1;
+    if (leinwand.width !== Math.round(breite * faktor)) leinwand.width = Math.round(breite * faktor);
+    if (leinwand.height !== Math.round(hoehe * faktor)) leinwand.height = Math.round(hoehe * faktor);
+    const g = leinwand.getContext("2d");
+    g.setTransform(faktor, 0, 0, faktor, 0, 0);
+    g.clearRect(0, 0, breite, hoehe);
+
+    const links = 44, rechts = 8, oben = 8, unten = 22;
+    const w = breite - links - rechts;
+    const h = hoehe - oben - unten;
+
+    // Y-Bereich: mindestens -10 % bis Grenzwert + 10 %, wächst mit den Werten
+    let yMin = -10, yMax = daten.grenzwertProzent + 10;
+    for (const p of daten.punkte) {
+      if (p.abweichung < yMin) yMin = p.abweichung;
+      if (p.abweichung > yMax) yMax = p.abweichung;
+    }
+    yMin = Math.floor(yMin / 5) * 5;
+    yMax = Math.ceil(yMax / 5) * 5;
+    if (yMax - yMin < 10) yMax = yMin + 10;
+    const yPixel = function (wert) { return oben + h - (wert - yMin) / (yMax - yMin) * h; };
+
+    // Raster und Beschriftung
+    g.font = "11px system-ui, sans-serif";
+    g.fillStyle = farbe("--text-leise");
+    g.strokeStyle = farbe("--raster");
+    g.lineWidth = 1;
+    const schritt = Math.max(5, Math.ceil((yMax - yMin) / 6 / 5) * 5);
+    for (let wert = Math.ceil(yMin / schritt) * schritt; wert <= yMax; wert += schritt) {
+      const y = yPixel(wert);
+      g.beginPath(); g.moveTo(links, y); g.lineTo(links + w, y); g.stroke();
+      g.fillText(wert + " %", 2, y + 4);
+    }
+    g.fillText("-10 s", links, hoehe - 6);
+    g.fillText("jetzt", links + w - 26, hoehe - 6);
+
+    // Grenzwert-Linie
+    g.strokeStyle = farbe("--grenze");
+    g.setLineDash([6, 4]);
+    g.beginPath();
+    g.moveTo(links, yPixel(daten.grenzwertProzent));
+    g.lineTo(links + w, yPixel(daten.grenzwertProzent));
+    g.stroke();
+    g.setLineDash([]);
+
+    // Verlauf
+    if (daten.punkte.length > 1) {
+      const ende = daten.punkte[daten.punkte.length - 1].zeitMs;
+      g.strokeStyle = farbe("--linie");
+      g.lineWidth = 2;
+      g.beginPath();
+      daten.punkte.forEach(function (p, i) {
+        const x = links + w - (ende - p.zeitMs) / VERLAUF_MS * w;
+        const y = yPixel(p.abweichung);
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      });
+      g.stroke();
+    }
+  }
+
+  // Anzeige auffrischen (etwa 20 Mal pro Sekunde).
+  function anzeigeAuffrischen() {
+    const jetzt = Date.now();
+    document.getElementById("anzeigeZustand").textContent = zustandText(daten.zustand);
+    const motor = document.getElementById("anzeigeMotor");
+    motor.textContent = daten.motor === null ? "–" : (daten.motor === 1 ? "an" : "aus");
+    motor.className = "wert" + (daten.motor === 1 ? " motor-an" : "");
+    document.getElementById("anzeigeAbweichung").textContent =
+      daten.abweichungProzent === null ? "–" : daten.abweichungProzent.toFixed(1) + " %";
+    document.getElementById("anzeigeWiderstand").textContent = widerstandText(daten.widerstandOhm);
+    document.getElementById("anzeigeAdc").textContent = daten.adc === null ? "–" : String(daten.adc);
+    document.getElementById("anzeigeRate").textContent = String(datenrate(jetzt));
+    document.getElementById("ereignis").textContent = "Letztes Ereignis: " + (daten.ereignis || "–");
+    zeichnen();
+  }
+
+  setInterval(anzeigeAuffrischen, 50);
+  window.addEventListener("resize", zeichnen);
+  anzeigeAuffrischen();
+}
+</script>
+</body>
+</html>

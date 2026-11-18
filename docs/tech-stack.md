@@ -67,6 +67,31 @@ Keine neue Bibliothek. Es wird nur `math.h` aus dem Arduino-Core (avr-libc) benu
 | Achsen-Suche (REQ-002 Runde 2, REQ-005) | Jacobi-Verfahren (cyclisch, 6x6, `logik.cpp`), seit REQ-005 einmal pro Sekunde und ab den Eigenvektoren der letzten Sekunde weitergerechnet (höchstens 2 Durchgänge pro Sekunde) | Ohne Matrix-Inversion (die war bei fast flachen Daten ungenau). Weiterrechnen spart Rechenzeit: Auswertung in Schritt 2 höchstens 100 ms (AK-17, am Board zu messen) |
 | `NICHT_INLINE` in `logik.cpp` | `__attribute__((noinline))` | Spart Flash, weil der Compiler die Hilfsfunktionen nicht überall hineinkopiert |
 
+## Prototyp 2 (Flex-Sensor, REQ-008)
+
+Eigener Ordner `jointsense_flex/`, eigenes GUI `tools/gui_flex/`. Prototyp 1 bleibt unverändert.
+
+| Teil | Version / Wert | Grund |
+|---|---|---|
+| Board | Adafruit Feather RP2040 (RP2040, 264 KB RAM, 8 MB Flash) | Team-Entscheid REQ-008: 12-Bit-ADC, 3,3 V, LiPo-Lader eingebaut |
+| Board-Paket `rp2040:rp2040` (arduino-pico von Earle Philhower) | `6.4.0` | Vom Team erlaubt (REQ-008). FQBN `rp2040:rp2040:adafruit_feather` |
+| Bibliotheken | keine zusätzliche | `Wire` ist im Board-Paket enthalten. Der DRV2605L wird direkt über seine Register angesprochen (keine neue Bibliothek, B-4) |
+| DRV2605L-Einstellung | Register `0x1A` Bit 7 = 0 (ERM), `0x1D` Bit 5 = 1 (ERM ohne Regelung), Bit 3 = 0 (RTP mit Vorzeichen, 127 = voll), Modus `0x01` = `0x05` (Echtzeit/RTP), Stärke in Register `0x02` | Einfachste Art: Stärke schreiben = Motor an, 0 schreiben = Motor aus. Die Stärke wird in jedem Messzyklus neu geschrieben, die Betriebsart einmal pro Sekunde (falls der Treiber kurz neu startet) |
+| I²C | Standard-Takt 100 kHz, `Wire.setTimeout(10, true)` | AK-13: höchstens 10 ms pro Befehl, Bus wird nach Zeitüberschreitung zurückgesetzt (B-3) |
+| Watchdog | `rp2040.wdt_begin(500)` aus dem Board-Paket | AK-12, B-9 |
+| ADC | `analogReadResolution(12)`, 4 Messungen pro Zyklus gemittelt | AK-1, glättet Rauschen und kleine Sprünge des RP2040-ADC |
+| Serial | 115200 Baud (beide Modi), Zeilen werden nur geschickt, wenn im USB-Puffer (256 Byte) Platz ist | AK-14. Liest der PC nicht mit, bleibt das Programm nicht hängen (B-3) |
+| Flash, `GUI_MODUS 1` (Standard) | 63668 Byte von 8384512 Byte (unter 1 %) | gemessen mit `arduino-cli 1.5.1`, Board-Paket 6.4.0 |
+| RAM (globale Variablen), `GUI_MODUS 1` | 9316 Byte von 262144 Byte (3 %) | der grösste Teil gehört dem Board-Paket (USB, Serial) |
+| Flash, `GUI_MODUS 0` (Text) | 63852 Byte von 8384512 Byte (unter 1 %) | |
+| RAM, `GUI_MODUS 0` | 9316 Byte von 262144 Byte (3 %) | |
+
+Kompilier-Befehl (lädt nichts hoch):
+
+```bash
+arduino-cli compile --fqbn rp2040:rp2040:adafruit_feather --warnings all --output-dir scratch/build_flex jointsense_flex
+```
+
 ## Test-Werkzeuge
 
 | Werkzeug | Version | Wozu |

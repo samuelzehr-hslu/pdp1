@@ -1,5 +1,5 @@
 # alle_tests.py
-# Startet alle Logik-Tests in docs/tests/logik/.
+# Startet alle Logik-Tests: Prototyp 1 (docs/tests/logik/) und Prototyp 2 (docs/tests/logik_flex/).
 #
 # Aufruf (aus dem Hauptordner des Repos):
 #   python docs/tests/alle_tests.py     (Mac/Linux: python3 docs/tests/alle_tests.py)
@@ -12,7 +12,13 @@
 #      Vorher werden die Python-Szenarien (docs/tests/szenarien/*.py) gestartet. Sie legen
 #      CSV-Dateien in scratch/szenarien/ ab, die manche Tests einlesen.
 #   2. Das fertige Testprogramm landet in scratch/tests/ (nicht im Repo) und wird gestartet.
-#   3. Am Schluss: Zusammenfassung. Exit-Code 0 = alles ok, 1 = mindestens ein Fehler.
+#   3. Danach der zweite Durchlauf für Prototyp 2 (Flex, REQ-008): jede Datei
+#      docs/tests/logik_flex/test_*.cpp wird zusammen mit jointsense_flex/*.cpp übersetzt
+#      (Include-Ordner jointsense_flex/). Die Programme heissen dort flex_<name> in scratch/tests/,
+#      damit nichts mit Prototyp 1 kollidiert. Fehlt der Ordner jointsense_flex/ noch, steht
+#      "übersprungen, Ordner fehlt" da, und das Skript läuft normal weiter.
+#   4. Am Schluss: Zusammenfassung. Exit-Code 0 = alles ok, 1 = mindestens ein Fehler.
+#      (Ein übersprungener Flex-Durchlauf ist kein Fehler.)
 
 import glob
 import os
@@ -24,6 +30,60 @@ HAUPTORDNER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 TEST_ORDNER = os.path.join(HAUPTORDNER, "docs", "tests", "logik")
 CODE_ORDNER = os.path.join(HAUPTORDNER, "jointsense")
 AUSGABE_ORDNER = os.path.join(HAUPTORDNER, "scratch", "tests")
+
+# Prototyp 2 (Flex)
+FLEX_TEST_ORDNER = os.path.join(HAUPTORDNER, "docs", "tests", "logik_flex")
+FLEX_CODE_ORDNER = os.path.join(HAUPTORDNER, "jointsense_flex")
+
+
+def durchlauf(compiler, test_ordner, code_ordner, vorsatz, test_hinweis):
+    """Übersetzt und startet alle test_*.cpp aus test_ordner zusammen mit code_ordner/*.cpp.
+
+    vorsatz: wird vor den Namen des Testprogramms gesetzt ("" bei Prototyp 1, "flex_" bei Prototyp 2).
+    Gibt (anzahl Testdateien, Liste der fehlgeschlagenen Namen) zurück.
+    """
+    testdateien = sorted(glob.glob(os.path.join(test_ordner, "test_*.cpp")))
+
+    if not testdateien:
+        print("Keine Testdateien gefunden (" + test_hinweis + ").")
+        return 0, []
+
+    fehlgeschlagen = []
+
+    for datei in testdateien:
+        name = os.path.splitext(os.path.basename(datei))[0]
+        # Auf Windows brauchen Programme die Endung .exe, auf Mac/Linux nicht
+        endung = ".exe" if os.name == "nt" else ""
+        programm = os.path.join(AUSGABE_ORDNER, vorsatz + name + endung)
+        print("== " + name)
+
+        # Schritt 1: Übersetzen
+        befehl = [
+            compiler, "-std=c++11", "-Wall", "-Wextra", "-Werror",
+            "-I", code_ordner, "-I", test_ordner,
+            datei,
+        ] + glob.glob(os.path.join(code_ordner, "*.cpp")) + ["-o", programm]
+        uebersetzt = subprocess.run(befehl)
+        if uebersetzt.returncode != 0:
+            print("  FEHLER  Übersetzen fehlgeschlagen")
+            fehlgeschlagen.append(name)
+            continue
+
+        # Schritt 2: Starten (höchstens 60 Sekunden, falls etwas hängt)
+        try:
+            gelaufen = subprocess.run([programm], timeout=60, cwd=HAUPTORDNER)
+        except subprocess.TimeoutExpired:
+            print("  FEHLER  Test hängt (länger als 60 s)")
+            fehlgeschlagen.append(name)
+            continue
+        if gelaufen.returncode != 0:
+            fehlgeschlagen.append(name)
+
+    print()
+    print("Testdateien: %d, fehlgeschlagen: %d" % (len(testdateien), len(fehlgeschlagen)))
+    for name in fehlgeschlagen:
+        print("  - " + name)
+    return len(testdateien), fehlgeschlagen
 
 
 def main():
@@ -57,47 +117,26 @@ def main():
             print("  FEHLER  Szenario-Skript fehlgeschlagen: " + os.path.basename(skript))
             sys.exit(1)
 
-    testdateien = sorted(glob.glob(os.path.join(TEST_ORDNER, "test_*.cpp")))
+    # Durchlauf 1: Prototyp 1 (unverändert wie bisher)
+    anzahl1, fehler1 = durchlauf(compiler, TEST_ORDNER, CODE_ORDNER, "", "docs/tests/logik/test_*.cpp")
 
-    if not testdateien:
-        print("Keine Testdateien gefunden (docs/tests/logik/test_*.cpp).")
-        sys.exit(0)
-
-    fehlgeschlagen = []
-
-    for datei in testdateien:
-        name = os.path.splitext(os.path.basename(datei))[0]
-        # Auf Windows brauchen Programme die Endung .exe, auf Mac/Linux nicht
-        endung = ".exe" if os.name == "nt" else ""
-        programm = os.path.join(AUSGABE_ORDNER, name + endung)
-        print("== " + name)
-
-        # Schritt 1: Übersetzen
-        befehl = [
-            compiler, "-std=c++11", "-Wall", "-Wextra", "-Werror",
-            "-I", CODE_ORDNER, "-I", TEST_ORDNER,
-            datei,
-        ] + glob.glob(os.path.join(CODE_ORDNER, "*.cpp")) + ["-o", programm]
-        uebersetzt = subprocess.run(befehl)
-        if uebersetzt.returncode != 0:
-            print("  FEHLER  Übersetzen fehlgeschlagen")
-            fehlgeschlagen.append(name)
-            continue
-
-        # Schritt 2: Starten (höchstens 60 Sekunden, falls etwas hängt)
-        try:
-            gelaufen = subprocess.run([programm], timeout=60, cwd=HAUPTORDNER)
-        except subprocess.TimeoutExpired:
-            print("  FEHLER  Test hängt (länger als 60 s)")
-            fehlgeschlagen.append(name)
-            continue
-        if gelaufen.returncode != 0:
-            fehlgeschlagen.append(name)
-
+    # Durchlauf 2: Prototyp 2 (Flex, REQ-008)
     print()
-    print("Testdateien: %d, fehlgeschlagen: %d" % (len(testdateien), len(fehlgeschlagen)))
-    for name in fehlgeschlagen:
-        print("  - " + name)
+    print("===== Prototyp 2 (Flex): docs/tests/logik_flex/ + jointsense_flex/ =====")
+    anzahl2 = 0
+    fehler2 = []
+    if not os.path.isdir(FLEX_CODE_ORDNER):
+        print("Flex-Durchlauf übersprungen, Ordner fehlt: jointsense_flex/ (noch nicht angelegt).")
+    elif not glob.glob(os.path.join(FLEX_CODE_ORDNER, "*.cpp")):
+        print("  FEHLER  jointsense_flex/ hat keine .cpp-Datei (logik.cpp fehlt)")
+        fehler2 = ["jointsense_flex/logik.cpp fehlt"]
+    else:
+        anzahl2, fehler2 = durchlauf(compiler, FLEX_TEST_ORDNER, FLEX_CODE_ORDNER, "flex_",
+                                     "docs/tests/logik_flex/test_*.cpp")
+
+    fehlgeschlagen = fehler1 + fehler2
+    if anzahl1 == 0 and anzahl2 == 0 and not fehlgeschlagen:
+        sys.exit(0)
     sys.exit(1 if fehlgeschlagen else 0)
 
 

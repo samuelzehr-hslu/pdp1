@@ -16,7 +16,7 @@ JointSense: tragbares Assistenzsystem, das die Überstreckung des Ellbogens erke
 
 ## Arbeitsweise mit Agenten (Pflicht)
 
-Jede Änderung an der Firmware (`jointsense/`) läuft über drei Agenten. Das gilt für alle, die das Repo klonen.
+Jede Änderung an der Firmware (`jointsense/` und `jointsense_flex/`) läuft über drei Agenten. Das gilt für alle, die das Repo klonen.
 
 | Agent | Datei | Aufgabe |
 |---|---|---|
@@ -46,11 +46,11 @@ Das ist nur die Übersicht. Die genauen Regeln stehen in `.claude/agents/enginee
 | `/setup-aenderung` | Kleine Änderung ohne ganze Pipeline (Pin, Einstellwert, Werkzeug, Agenten-Regel): der Engineer passt alle Stellen im Repo an |
 | `/testen` | Aktuellen Code ausserhalb der Pipeline testen (z. B. nach Änderungen von Hand) |
 | `/status` | Übersicht: welche Anforderung steht wo |
-| `/einrichten` | Erkennt System und Prozessor, prüft `arduino-cli`, C++-Compiler, `cppcheck`, Python, `wokwi-cli` und die Sicherheits-Sperren |
+| `/einrichten` | Erkennt System und Prozessor, prüft `arduino-cli` mit den Board-Paketen `arduino:avr` und `rp2040:rp2040`, C++-Compiler, `cppcheck`, Python, `wokwi-cli` und die Sicherheits-Sperren |
 
 ### Regeln
 
-- Kein Code in `jointsense/` ohne Anforderung mit Status `fixiert` oder später. Ausgenommen sind kleine Tippfehler in Kommentaren und Änderungen über `/setup-aenderung`.
+- Kein Code in `jointsense/` oder `jointsense_flex/` ohne Anforderung mit Status `fixiert` oder später. Ausgenommen sind kleine Tippfehler in Kommentaren und Änderungen über `/setup-aenderung`.
 - Der Developer ändert **nie** Tests. Hält er einen Test oder eine Anforderung für falsch, meldet er das dem Engineer.
 - Status-Werte: `Entwurf → fixiert → tests-geschrieben → umgesetzt → getestet → abgenommen`, dazu `pausiert`.
 - Hochladen aufs Board und der Serielle Monitor sind in `.claude/settings.json` **gesperrt**. Hochladen macht ein Mensch selbst (Arduino IDE oder `arduino-cli upload`).
@@ -68,14 +68,25 @@ Das Framework läuft auf **Windows (x64 und ARM64), Mac (Intel und Apple-Chip) u
 
 ## Source of Truth für die Verdrahtung
 
-- `README.md`, Abschnitt «Verdrahtung (Schaltplan Rev. B)», ist die **einzige Wahrheit** für die Verkabelung.
+- `README.md`, Abschnitt «Verdrahtung (Schaltplan Rev. B)», ist die **einzige Wahrheit** für die Verkabelung von Prototyp 1, Abschnitt «Verdrahtung Prototyp 2 (Flex)» für Prototyp 2 (`jointsense_flex/pins.h`).
 - `jointsense/pins.h` ist die **einzige Stelle im Code**, an der Pin-Nummern und I²C-Adressen stehen. Sie ist eine 1:1-Übersetzung der README-Tabelle.
 - Im restlichen Code nur die Namen verwenden (z. B. `PIN_MOTOR_PWM`), nie Zahlen wie `9`.
 - Ändert sich ein Kabel: **zuerst README, dann `pins.h`, im selben Commit.** Nicht still eine von beiden ändern; Widersprüche dem Team melden.
 
 ## Code-Struktur
 
-Arduino-Sketch in `jointsense/`. Der Ordnername muss gleich heissen wie die `.ino`-Datei (Arduino-Regel).
+Es gibt **zwei Prototypen**, jeder ist ein eigener Arduino-Sketch. Der Ordnername muss gleich heissen wie die `.ino`-Datei (Arduino-Regel).
+
+| Prototyp | Sensor | Ordner | Logik-Tests |
+|---|---|---|---|
+| 1 | 2 IMUs (Oberarm + Unterarm) | `jointsense/` | `docs/tests/logik/` |
+| 2 | Flex-/Biegesensor über dem Ellbogen | `jointsense_flex/` (Hauptdatei `jointsense_flex.ino`) | `docs/tests/logik_flex/` |
+
+- Jede Anforderung nennt im Feld **Prototyp**, welchen Ordner sie betrifft (fehlt es: Prototyp 1).
+- Die beiden Sketches teilen keinen Code (Arduino kann keine Dateien aus einem anderen Sketch-Ordner einbinden). Jeder hat eigene `pins.h`, `logik.h`/`logik.cpp` und `diagram.json`.
+- Die Regeln unten gelten für beide Ordner gleich. Die Beispiele zeigen Prototyp 1.
+
+Aufbau von Prototyp 1 (`jointsense/`):
 
 - `jointsense/jointsense.ino`: Ablauf (`setup()`, `loop()`) und alles, was Hardware braucht (Sensoren lesen, Motor, Taste, Serieller Monitor).
 - `jointsense/logik.h` + `jointsense/logik.cpp`: reine Logik (Grenzwert, Entprellung, Hysterese, Einmessen) **ohne Arduino-Befehle**. In `.h` steht die Liste der Funktionen, in `.cpp` ihr Inhalt. So kann man die Logik mit `g++` auf dem PC testen. Zeit (`millis()`) wird als Wert übergeben, nicht in der Logik abgefragt.
@@ -104,7 +115,7 @@ Dokumentation und Tests liegen in `docs/`:
 
 Gebaut wird mit der Arduino IDE oder `arduino-cli`. Tests laufen auf dem PC (siehe oben), einen Build-Server gibt es nicht.
 
-- Kompilieren (z. B. Uno): `arduino-cli compile --fqbn arduino:avr:uno --warnings all --output-dir scratch/build jointsense` (Nano: `arduino:avr:nano`). Das lädt nichts aufs Board, den Pfad zu `arduino-cli` und das Board vorher aus `CLAUDE.local.md` bzw. beim Team erfragen.
+- Kompilieren (z. B. Uno): `arduino-cli compile --fqbn arduino:avr:uno --warnings all --output-dir scratch/build jointsense` (Nano: `arduino:avr:nano`). Prototyp 2 (Feather RP2040, Board-Paket arduino-pico nötig): `arduino-cli compile --fqbn rp2040:rp2040:adafruit_feather --warnings all --output-dir scratch/build_flex jointsense_flex`. Das lädt nichts aufs Board, den Pfad zu `arduino-cli` und das Board vorher aus `CLAUDE.local.md` bzw. beim Team erfragen.
 - Hochladen (`arduino-cli upload`) ist für Claude gesperrt, siehe oben. Ein Mensch lädt selbst hoch, nach Absprache im Team.
 
 ## Offene Punkte (nicht selbst entscheiden)
@@ -115,3 +126,4 @@ Diese Punkte sind im Team noch zu klären und in `pins.h` als `TODO` markiert:
 2. **IMU-Typ** ist offen. Die README nennt den BNO085, die Adressen `0x68`/`0x69` über AD0 passen aber zu MPU6050/MPU6500 (BNO085: `0x4A`/`0x4B`).
 3. **Motortreiber-Typ** ist offen.
 4. **IMU-Bibliothek** ist offen (README «Setup», Punkt 3).
+5. **Prototyp 2 (Flex):** Verdrahtung ist festgelegt (README «Verdrahtung Prototyp 2 (Flex)», REQ-008). Offen: Akku-Polarität des LiPo vor dem ersten Anschliessen mit Multimeter prüfen (Schutzschaltung ist laut Händler vorhanden), und per Versuch am Arm klären, wie viele Grad 1 % Abweichung sind.

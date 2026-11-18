@@ -141,6 +141,23 @@ else:
         print("[FEHLT] arduino:avr (Uno/Nano)")
         alles_ok = False
 
+    # Ist der Core für Prototyp 2 (Feather RP2040, arduino-pico) installiert?
+    # Fest geprüfte Version laut docs/tech-stack.md: 6.4.0
+    RP2040_VERSION = "6.4.0"
+    rp2040_zeile = ""
+    for zeile in alle_cores.splitlines():
+        if zeile.startswith("rp2040:rp2040"):
+            rp2040_zeile = zeile
+    if not rp2040_zeile:
+        print("[FEHLT] rp2040:rp2040 (Feather RP2040, Prototyp 2)")
+        alles_ok = False
+    elif RP2040_VERSION in rp2040_zeile.split():
+        print(f"[OK]    rp2040:rp2040 {RP2040_VERSION} (Feather RP2040, Prototyp 2)")
+    else:
+        # Spalten von "core list": ID, installierte Version, neueste Version, Name
+        installiert = rp2040_zeile.split()[1] if len(rp2040_zeile.split()) > 1 else "?"
+        print(f"[HINWEIS] rp2040:rp2040 ist da, aber Version {installiert} statt {RP2040_VERSION}")
+
 # Mac mit Apple-Chip: Das Board-Paket arduino:avr enthält Intel-Programme,
 # die nur mit Rosetta 2 laufen.
 if system == "Mac" and prozessor.startswith("ARM64"):

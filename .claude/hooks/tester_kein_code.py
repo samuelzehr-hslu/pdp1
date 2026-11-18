@@ -14,6 +14,11 @@ import json
 import os
 import sys
 
+# Firmware-Ordner, in denen der Tester nichts schreiben darf:
+#   jointsense       = Prototyp 1 (2 IMUs)
+#   jointsense_flex  = Prototyp 2 (Flex-Sensor)
+GESPERRTE_ORDNER = ["jointsense", "jointsense_flex"]
+
 
 def main():
     # Umlaute in Meldungen auch unter Windows richtig ausgeben
@@ -46,13 +51,17 @@ def main():
         sys.exit(0)
     relativ = relativ.replace("\\", "/").lower()
 
-    if relativ == "jointsense" or relativ.startswith("jointsense/"):
-        print(
-            "Gesperrt: Der Tester ändert keinen Produkt-Code in jointsense/. "
-            "Fehler bitte dem Engineer melden.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+    # Liegt die Datei in einem der Firmware-Ordner? Dann verboten.
+    # Der Schrägstrich ("ordner/") ist wichtig: Sonst würde z. B. auch eine Datei
+    # "jointsense_notizen.md" im Hauptordner gesperrt.
+    for ordner in GESPERRTE_ORDNER:
+        if relativ == ordner or relativ.startswith(ordner + "/"):
+            print(
+                "Gesperrt: Der Tester ändert keinen Produkt-Code in jointsense/ "
+                "oder jointsense_flex/. Fehler bitte dem Engineer melden.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
 
     sys.exit(0)
 

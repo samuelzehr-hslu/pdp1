@@ -12,6 +12,7 @@ Status-Ablauf:
 | Feld | Wert |
 |---|---|
 | **ID** | REQ-xxx |
+| **Prototyp** | 1 (2 IMUs, `jointsense/`) oder 2 (Flex-Sensor, `jointsense_flex/`) |
 | **Status** | Entwurf |
 | **Runde** | 0 von 3 |
 | **Test-Korrekturen** | 0 von 3 |

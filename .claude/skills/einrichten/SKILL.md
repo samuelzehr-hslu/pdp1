@@ -1,6 +1,6 @@
 ---
 name: einrichten
-description: Prüft, ob alle Werkzeuge für JointSense installiert sind (arduino-cli mit avr-Core, C++-Compiler, cppcheck, Python, wokwi-cli mit Token, Sicherheits-Sperren), erkennt Windows/Mac/Linux und Intel/ARM und erklärt Schritt für Schritt, was fehlt. Installiert nichts ohne Rückfrage.
+description: Prüft, ob alle Werkzeuge für JointSense installiert sind (arduino-cli mit avr- und rp2040-Core, C++-Compiler, cppcheck, Python, wokwi-cli mit Token, Sicherheits-Sperren), erkennt Windows/Mac/Linux und Intel/ARM und erklärt Schritt für Schritt, was fehlt. Installiert nichts ohne Rückfrage.
 ---
 
 # /einrichten: Werkzeuge prüfen
@@ -29,7 +29,8 @@ Erkläre für **jedes fehlende Werkzeug**:
 | Python 3 | Prüfskript, Sicherheits-Sperren, Szenarien | `winget install Python.Python.3.12` oder python.org («Add to PATH» ankreuzen) | gleich, winget wählt die ARM-Version selbst | `brew install python` | `sudo apt install python3` |
 | sh (Shell) | startet die Sicherheits-Sperren | kommt mit Git for Windows (`winget install Git.Git`), das Claude Code ohnehin braucht | gleich | schon vorhanden | schon vorhanden |
 | arduino-cli | Code für Uno/Nano kompilieren | `winget install ArduinoSA.CLI` | gleich (die Intel-Version läuft über die eingebaute Emulation) | `brew install arduino-cli` | Installationsskript von arduino.github.io/arduino-cli (es gibt ARM64-Versionen) |
-| arduino:avr | Board-Paket für Uno/Nano | `arduino-cli core update-index`, dann `arduino-cli core install arduino:avr` | gleich | gleich | gleich |
+| arduino:avr | Board-Paket für Uno/Nano (Prototyp 1) | `arduino-cli core update-index`, dann `arduino-cli core install arduino:avr` | gleich | gleich | gleich |
+| rp2040:rp2040 | Board-Paket für den Feather RP2040 (Prototyp 2, Flex) | `arduino-cli config add board_manager.additional_urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json`, dann `arduino-cli core update-index`, dann `arduino-cli core install rp2040:rp2040@6.4.0` | gleich | gleich | gleich |
 | Rosetta 2 | nur Mac mit Apple-Chip: das Board-Paket enthält Intel-Programme | – | – | `softwareupdate --install-rosetta` | – |
 | C++-Compiler (`g++` oder `clang++`) | Logik-Tests auf dem PC | MSYS2 von msys2.org, im MSYS2-Fenster `pacman -S mingw-w64-ucrt-x86_64-gcc`, Ordner `C:\msys64\ucrt64\bin` zum PATH | MSYS2 (ARM-Installer), im Fenster «MSYS2 CLANGARM64» `pacman -S mingw-w64-clang-aarch64-clang`, Ordner `C:\msys64\clangarm64\bin` zum PATH (gibt `clang++`) | `xcode-select --install` | `sudo apt install g++` |
 | cppcheck | sucht Sicherheitsfehler im Code | `winget install Cppcheck.Cppcheck`, Ordner `C:\Program Files\Cppcheck` zum PATH | gleich (läuft über Emulation) oder in MSYS2: `pacman -S mingw-w64-clang-aarch64-cppcheck` | `brew install cppcheck` | `sudo apt install cppcheck` |

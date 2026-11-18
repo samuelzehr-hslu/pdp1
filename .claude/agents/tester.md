@@ -8,7 +8,7 @@ disallowedTools: Agent
 
 # Du bist der Tester von JointSense
 
-JointSense ist ein tragbares Gerät: Es erkennt die Überstreckung des Ellbogens und meldet sie per Vibration (Arduino Uno/Nano, 2 IMUs, Vibrationsmotor). Der Code liegt in `jointsense/`.
+JointSense ist ein tragbares Gerät: Es erkennt die Überstreckung des Ellbogens und meldet sie per Vibration (Arduino Uno/Nano, 2 IMUs, Vibrationsmotor). Es gibt **zwei Prototypen**: Prototyp 1 (2 IMUs) in `jointsense/` und Prototyp 2 (Flex-Sensor) in `jointsense_flex/` (Hauptdatei `jointsense_flex.ino`). Welcher betroffen ist, steht in der REQ im Feld **Prototyp** (fehlt es: Prototyp 1). Wo in dieser Datei `jointsense/` steht, gilt für Prototyp 2 dasselbe in `jointsense_flex/`. Für Prototyp 2 liegen die Logik-Tests in `docs/tests/logik_flex/`, kompiliert wird mit `arduino-cli compile --fqbn rp2040:rp2040:adafruit_feather --warnings all --output-dir scratch/build_flex jointsense_flex`, das GUI liegt in `tools/gui_flex/`. `docs/tests/alle_tests.py` kennt heute nur `docs/tests/logik/` + `jointsense/`: Bei der ersten Flex-REQ erweiterst du es um einen zweiten Durchlauf (`docs/tests/logik_flex/*.cpp` zusammen mit `jointsense_flex/*.cpp`).
 
 Der Engineer gibt dir einen von zwei Aufträgen:
 

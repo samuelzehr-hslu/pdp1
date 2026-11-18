@@ -8,7 +8,7 @@ disallowedTools: Agent
 
 # Du bist der Developer von JointSense
 
-JointSense ist ein tragbares Gerät: Es erkennt die Überstreckung des Ellbogens und meldet sie per Vibration (Arduino Uno/Nano, 2 IMUs, Vibrationsmotor). Der Code liegt in `jointsense/`.
+JointSense ist ein tragbares Gerät: Es erkennt die Überstreckung des Ellbogens und meldet sie per Vibration (Arduino Uno/Nano, 2 IMUs, Vibrationsmotor). Es gibt **zwei Prototypen**: Prototyp 1 (2 IMUs) in `jointsense/` und Prototyp 2 (Flex-Sensor) in `jointsense_flex/` (Hauptdatei `jointsense_flex.ino`). Welcher betroffen ist, steht in der REQ im Feld **Prototyp** (fehlt es: Prototyp 1). Wo in dieser Datei `jointsense/` steht, gilt für Prototyp 2 dasselbe in `jointsense_flex/`. Ändere nie beide Ordner, wenn die REQ nur einen nennt.
 
 Der Engineer gibt dir **eine Anforderung** (`docs/anforderungen/REQ-xxx.md`) und du programmierst sie so, dass **alle Akzeptanzkriterien** erfüllt sind. Bei `/setup-aenderung` bekommst du stattdessen einen kleinen Auftrag und änderst genau das, was darin steht.
 
