@@ -71,6 +71,16 @@
   .motor-an { color: var(--warnung); font-weight: 600; }
   canvas { width: 100%; height: 300px; display: block; }
   #meldung, #ereignis { color: var(--text-leise); font-size: 0.9rem; margin: 8px 0 0; overflow-wrap: anywhere; }
+  /* Stufen-Test (tools/flex_stufen) */
+  .stufen { margin-bottom: 12px; }
+  #anzeigeStufe { font-size: 1.4rem; font-weight: 600; }
+  #stufeHinweis { color: var(--text-leise); font-size: 0.9rem; margin-top: 4px; }
+  .stufen .knoepfe { margin: 8px 0 0; }
+  button.aktiv { border-color: var(--linie); color: var(--linie); font-weight: 600; }
+  .warnhinweis { color: var(--warnung); font-weight: 600; }
+  #checkliste { margin: 8px 0 0; padding-left: 0; list-style: none; }
+  #checkliste li { margin: 4px 0; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -81,17 +91,33 @@
   <button id="knopfEinmessen" disabled>Einmessen</button>
 </div>
 
+<!-- Stufen-Test: welche Stufe läuft auf dem Feather? (Stufe 1-4 = tools/flex_stufen, 5 = jointsense_flex) -->
+<div class="karte stufen">
+  <div class="name">Stufen-Test</div>
+  <div id="anzeigeStufe">Aktuelle Stufe: –</div>
+  <div id="stufeHinweis">Noch nicht verbunden.</div>
+  <div class="knoepfe">
+    <button id="knopfStufe1" disabled>Stufe 1 · Sensor</button>
+    <button id="knopfStufe2" disabled>Stufe 2 · Grenzwert</button>
+    <button id="knopfStufe3" disabled>Stufe 3 · Taste + LED</button>
+    <button id="knopfStufe4" disabled>Stufe 4 · Motor</button>
+  </div>
+  <ul id="checkliste"></ul>
+</div>
+
 <div class="werte">
-  <div class="karte"><div class="name">Zustand</div><div class="wert" id="anzeigeZustand">–</div></div>
-  <div class="karte"><div class="name">Motor</div><div class="wert" id="anzeigeMotor">–</div></div>
-  <div class="karte"><div class="name">Abweichung</div><div class="wert" id="anzeigeAbweichung">–</div></div>
+  <div class="karte" id="karteZustand"><div class="name">Zustand</div><div class="wert" id="anzeigeZustand">–</div></div>
+  <div class="karte" id="karteAlarm" hidden><div class="name">Zu weit (Alarm)</div><div class="wert" id="anzeigeAlarm">–</div></div>
+  <div class="karte" id="karteMotor"><div class="name">Motor</div><div class="wert" id="anzeigeMotor">–</div></div>
+  <div class="karte" id="karteAbweichung"><div class="name">Abweichung</div><div class="wert" id="anzeigeAbweichung">–</div></div>
   <div class="karte"><div class="name">Widerstand</div><div class="wert" id="anzeigeWiderstand">–</div></div>
   <div class="karte"><div class="name">ADC-Rohwert</div><div class="wert" id="anzeigeAdc">–</div></div>
   <div class="karte"><div class="name">Datenrate (Zeilen/s)</div><div class="wert" id="anzeigeRate">0</div></div>
 </div>
+<p id="kabelHinweis" class="warnhinweis" hidden></p>
 
 <div class="karte">
-  <div class="name">Abweichung in % (letzte 10 s), rote Linie = Grenzwert. Positiv = Richtung Überstreckung.</div>
+  <div class="name" id="diagrammTitel">Abweichung in % (letzte 10 s), rote Linie = Grenzwert. Positiv = Richtung Überstreckung.</div>
   <canvas id="verlauf"></canvas>
 </div>
 
@@ -110,6 +136,23 @@ const MAX_PUNKTE = 1000;           // Sicherheit: nie mehr Punkte speichern (50/
 // Zustandstexte (Nummern wie in der D-Zeile)
 const ZUSTANDSTEXTE = ["Keine Referenz", "Bereit", "Einmessen", "Sensor-Ausfall", "Motor-Ausfall"];
 
+// Stufen-Test: Namen und Checklisten. Stufe 1-4 schickt tools/flex_stufen (S-Zeile).
+// Kommt keine S-Zeile, läuft der komplette Code jointsense_flex = Stufe 5.
+const STUFEN_NAMEN = { 1: "Sensor", 2: "Grenzwert", 3: "Taste + LED", 4: "Motor", 5: "Komplett" };
+const STUFEN_CHECKLISTEN = {
+  1: ["Datenrate etwa 50", "ADC-Wert ändert sich beim Biegen", "ADC-Wert ist ruhig, wenn der Arm still ist",
+      "ADC-Wert bleibt zwischen 100 und 3995 (kein Kabel-Hinweis)"],
+  2: ["Arm entspannt gestreckt, «Referenz setzen» drücken, Zustand wird «Bereit»",
+      "Überstrecken: Abweichung steigt, ab 5 % wird «Zu weit» rot",
+      "Zurück: «Zu weit» geht erst unter 4 % aus (Hysterese)", "Notieren: wie viele % sind 5°, 10°, 15°?"],
+  3: ["Taste am Gerät drücken: Ereignis «Taste gedrueckt» und neue Referenz",
+      "Rote LED auf dem Feather leuchtet genau dann, wenn «Zu weit» rot ist"],
+  4: ["Ereignis «DRV2605L gefunden» (sonst Kabel SDA, SCL, VIN, GND prüfen und Stufe 4 nochmals drücken)",
+      "Überstrecken: Motor vibriert", "Zurück unter 4 %: Motor hört auf"],
+  5: ["Einmessen mit Knopf oder Taste: Motor vibriert kurz", "Überstrecken: Motor vibriert",
+      "Für Stufe 1–4: tools/flex_stufen/flex_stufen.ino hochladen"]
+};
+
 // ---------- Daten ----------
 const daten = {
   grenzwertProzent: 5.0,     // aus der G-Zeile
@@ -121,7 +164,8 @@ const daten = {
   motor: null,
   zustand: null,
   ereignis: "",
-  punkte: [],               // {zeitMs, abweichung} (zeitMs = Zeit vom Feather)
+  stufe: null,              // 1-4 aus der S-Zeile, null = keine S-Zeile (= Stufe 5)
+  punkte: [],               // {zeitMs, abweichung, adc} (zeitMs = Zeit vom Feather)
   zeilenZeiten: []          // Empfangszeiten der D-Zeilen (für die Datenrate)
 };
 
@@ -148,6 +192,15 @@ function zeileVerarbeiten(zeile, empfangMs) {
   }
 
   const teile = zeile.split(",");
+
+  // S-Zeile: welche Stufe auf dem Feather läuft (nur der Stufen-Test schickt sie)
+  if (teile[0] === "S" && teile.length === 2) {
+    const s = ganzeZahl(teile[1]);
+    if (s === null || s < 1 || s > 4) return false;
+    if (daten.stufe !== s) daten.punkte = [];  // neue Stufe: Diagramm leeren
+    daten.stufe = s;
+    return true;
+  }
 
   if (teile[0] === "G" && teile.length === 4) {
     const grenz = ganzeZahl(teile[1]);
@@ -178,7 +231,7 @@ function zeileVerarbeiten(zeile, empfangMs) {
     // Feather neu gestartet (Zeit springt zurück)? Dann Verlauf leeren.
     const letzter = daten.punkte[daten.punkte.length - 1];
     if (letzter && zeitMs < letzter.zeitMs) daten.punkte = [];
-    daten.punkte.push({ zeitMs: zeitMs, abweichung: abwZehntel / 10 });
+    daten.punkte.push({ zeitMs: zeitMs, abweichung: abwZehntel / 10, adc: adc });
     while (daten.punkte.length > MAX_PUNKTE ||
            (daten.punkte.length > 0 && daten.punkte[0].zeitMs < zeitMs - VERLAUF_MS)) {
       daten.punkte.shift();
@@ -220,6 +273,25 @@ function zustandText(zustand) {
   return ZUSTANDSTEXTE[zustand];
 }
 
+// Welche Stufe gilt? Ohne S-Zeile ist es der komplette Code = Stufe 5.
+function aktuelleStufe() {
+  return daten.stufe === null ? 5 : daten.stufe;
+}
+
+// Text für die Stufen-Anzeige, z. B. "Aktuelle Stufe: 2 – Grenzwert".
+function stufeText() {
+  const s = aktuelleStufe();
+  return "Aktuelle Stufe: " + s + " – " + STUFEN_NAMEN[s];
+}
+
+// Hinweis, wenn der ADC-Wert am Rand liegt (dann stimmt wohl ein Kabel nicht). Sonst "".
+function kabelHinweis(adc) {
+  if (adc === null) return "";
+  if (adc < 100) return "ADC-Wert fast 0: Kabel zum Flex-Sensor ab? (3V3 – Flex – A0 prüfen)";
+  if (adc > 3995) return "ADC-Wert fast 4095: Kurzschluss oder 22-kΩ-Widerstand fehlt? (A0 – 22 kΩ – GND prüfen)";
+  return "";
+}
+
 // Zerlegt ankommenden Text in Zeilen. Gibt den unfertigen Rest zurück.
 function textVerarbeiten(rest, neuerText) {
   let puffer = rest + neuerText;
@@ -232,7 +304,8 @@ function textVerarbeiten(rest, neuerText) {
 
 // Für die Tests auf dem PC (node). Im Browser passiert hier nichts.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { zeileVerarbeiten, textVerarbeiten, datenrate, widerstandText, zustandText, daten, ZUSTANDSTEXTE };
+  module.exports = { zeileVerarbeiten, textVerarbeiten, datenrate, widerstandText, zustandText, daten, ZUSTANDSTEXTE,
+                     aktuelleStufe, stufeText, kabelHinweis, STUFEN_NAMEN };
 }
 
 // ---------- Ab hier nur im Browser ----------
@@ -266,6 +339,7 @@ if (typeof document !== "undefined") {
     knopfEinmessen.disabled = schreiber === null;
     meldungZeigen("Verbunden. Daten kommen …");
     daten.punkte = [];
+    daten.stufe = null;  // erst die S-Zeile vom Feather sagt, welche Stufe läuft
 
     const decoder = new TextDecoder();
     let rest = "";
@@ -298,12 +372,34 @@ if (typeof document !== "undefined") {
     meldungZeigen("Verbindung beendet. Zum Neu-Verbinden «Verbinden» drücken.");
   }
 
-  // Knopf «Einmessen»: schickt genau ein Enter ("\n").
+  // Knopf «Einmessen» (bzw. «Referenz setzen» im Stufen-Test): schickt genau ein Enter ("\n").
   async function einmessen() {
     if (!schreiber) return;
     try {
       await schreiber.write(new TextEncoder().encode("\n"));
-      meldungZeigen("Einmessen gestartet: Arm 2 s entspannt gestreckt und ruhig halten.");
+      if (aktuelleStufe() === 5) {
+        meldungZeigen("Einmessen gestartet: Arm 2 s entspannt gestreckt und ruhig halten.");
+      } else {
+        meldungZeigen("Referenz wird gemessen: Arm 1 s entspannt gestreckt und ruhig halten.");
+      }
+    } catch (fehler) {
+      meldungZeigen("Senden hat nicht geklappt: " + fehler.message);
+    }
+  }
+
+  // Knopf «Stufe 1» bis «Stufe 4»: schickt die Ziffer an den Feather.
+  // Die Anzeige oben wechselt erst, wenn der Feather mit "S,<stufe>" antwortet.
+  async function stufeWaehlen(nummer) {
+    if (!schreiber) return;
+    // Sicherung: Nur senden, wenn der Feather den Stufen-Test meldet (S-Zeile).
+    // Dem kompletten Code (Stufe 5) schicken wir keine Ziffern.
+    if (daten.stufe === null) {
+      meldungZeigen("Stufen wechseln geht nur mit tools/flex_stufen/flex_stufen.ino auf dem Feather.");
+      return;
+    }
+    try {
+      await schreiber.write(new TextEncoder().encode(String(nummer)));
+      meldungZeigen("Stufe " + nummer + " angefragt …");
     } catch (fehler) {
       meldungZeigen("Senden hat nicht geklappt: " + fehler.message);
     }
@@ -311,14 +407,26 @@ if (typeof document !== "undefined") {
 
   knopfVerbinden.addEventListener("click", verbinden);
   knopfEinmessen.addEventListener("click", einmessen);
+  for (let nummer = 1; nummer <= 4; nummer++) {
+    document.getElementById("knopfStufe" + nummer).addEventListener("click", function () { stufeWaehlen(nummer); });
+  }
 
   // Farbe aus den CSS-Variablen holen (hell/dunkel).
   function farbe(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  // Zeichnet das Diagramm: Abweichung über die letzten 10 s und die Grenzwert-Linie.
+  // Zeichnet das Diagramm. Stufe 1: ADC-Rohwert. Sonst: Abweichung mit Grenzwert-Linie.
   function zeichnen() {
+    if (aktuelleStufe() === 1) {
+      adcZeichnen();
+    } else {
+      abweichungZeichnen();
+    }
+  }
+
+  // Leinwand vorbereiten (Grösse, Schärfe, löschen). Gibt den Zeichen-Stift zurück.
+  function leinwandVorbereiten() {
     const breite = leinwand.clientWidth;
     const hoehe = leinwand.clientHeight;
     const faktor = window.devicePixelRatio || 1;
@@ -327,6 +435,75 @@ if (typeof document !== "undefined") {
     const g = leinwand.getContext("2d");
     g.setTransform(faktor, 0, 0, faktor, 0, 0);
     g.clearRect(0, 0, breite, hoehe);
+    return g;
+  }
+
+  // Stufe 1: ADC-Rohwert der letzten 10 s. Der Bereich passt sich an, damit man kleine
+  // Änderungen sieht. Gestrichelt: die Grenzen 100 und 3995 (ausserhalb = Kabel prüfen).
+  function adcZeichnen() {
+    const g = leinwandVorbereiten();
+    const breite = leinwand.clientWidth;
+    const hoehe = leinwand.clientHeight;
+    const links = 44, rechts = 8, oben = 8, unten = 22;
+    const w = breite - links - rechts;
+    const h = hoehe - oben - unten;
+
+    // Y-Bereich: kleinster bis grösster Wert, mindestens 200 breit, auf 100 gerundet
+    let yMin = 4095, yMax = 0;
+    for (const p of daten.punkte) {
+      if (p.adc < yMin) yMin = p.adc;
+      if (p.adc > yMax) yMax = p.adc;
+    }
+    if (yMin > yMax) { yMin = 0; yMax = 4095; }   // noch keine Punkte
+    yMin = Math.max(0, Math.floor((yMin - 50) / 100) * 100);
+    yMax = Math.min(4100, Math.ceil((yMax + 50) / 100) * 100);
+    if (yMax - yMin < 200) yMax = yMin + 200;
+    const yPixel = function (wert) { return oben + h - (wert - yMin) / (yMax - yMin) * h; };
+
+    // Raster und Beschriftung
+    g.font = "11px system-ui, sans-serif";
+    g.fillStyle = farbe("--text-leise");
+    g.strokeStyle = farbe("--raster");
+    g.lineWidth = 1;
+    const schritt = Math.max(50, Math.ceil((yMax - yMin) / 6 / 50) * 50);
+    for (let wert = Math.ceil(yMin / schritt) * schritt; wert <= yMax; wert += schritt) {
+      const y = yPixel(wert);
+      g.beginPath(); g.moveTo(links, y); g.lineTo(links + w, y); g.stroke();
+      g.fillText(String(wert), 2, y + 4);
+    }
+    g.fillText("-10 s", links, hoehe - 6);
+    g.fillText("jetzt", links + w - 26, hoehe - 6);
+
+    // Gültigkeits-Grenzen (nur zeichnen, wenn sie im Bild sind)
+    g.strokeStyle = farbe("--grenze");
+    g.setLineDash([6, 4]);
+    for (const grenze of [100, 3995]) {
+      if (grenze >= yMin && grenze <= yMax) {
+        g.beginPath(); g.moveTo(links, yPixel(grenze)); g.lineTo(links + w, yPixel(grenze)); g.stroke();
+      }
+    }
+    g.setLineDash([]);
+
+    // Verlauf
+    if (daten.punkte.length > 1) {
+      const ende = daten.punkte[daten.punkte.length - 1].zeitMs;
+      g.strokeStyle = farbe("--linie");
+      g.lineWidth = 2;
+      g.beginPath();
+      daten.punkte.forEach(function (p, i) {
+        const x = links + w - (ende - p.zeitMs) / VERLAUF_MS * w;
+        const y = yPixel(p.adc);
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      });
+      g.stroke();
+    }
+  }
+
+  // Abweichung über die letzten 10 s und die Grenzwert-Linie (Stufe 2 bis 5).
+  function abweichungZeichnen() {
+    const g = leinwandVorbereiten();
+    const breite = leinwand.clientWidth;
+    const hoehe = leinwand.clientHeight;
 
     const links = 44, rechts = 8, oben = 8, unten = 22;
     const w = breite - links - rechts;
@@ -381,13 +558,84 @@ if (typeof document !== "undefined") {
     }
   }
 
+  // Stufen-Teil auffrischen: Stufen-Text, Knöpfe, welche Karten sichtbar sind, Checkliste.
+  let gezeigteChecklisteStufe = null;  // für welche Stufe die Checkliste gerade aufgebaut ist
+  function stufenAuffrischen() {
+    const s = aktuelleStufe();
+    const verbunden = schreiber !== null;
+
+    document.getElementById("anzeigeStufe").textContent = verbunden ? stufeText() : "Aktuelle Stufe: –";
+    let hinweis = "Noch nicht verbunden.";
+    if (verbunden && s === 5) {
+      hinweis = "Auf dem Feather läuft der komplette Code (jointsense_flex). Für Stufe 1–4 zuerst tools/flex_stufen/flex_stufen.ino hochladen.";
+    } else if (verbunden) {
+      hinweis = "Stufen-Test läuft. Mit den Knöpfen wechseln (kein neues Hochladen nötig).";
+    }
+    document.getElementById("stufeHinweis").textContent = hinweis;
+
+    // Stufen-Knöpfe: nur im Stufen-Test, die aktive Stufe hervorgehoben
+    for (let nummer = 1; nummer <= 4; nummer++) {
+      const knopf = document.getElementById("knopfStufe" + nummer);
+      knopf.disabled = !verbunden || s === 5;
+      knopf.className = (verbunden && s === nummer) ? "aktiv" : "";
+    }
+
+    // Welche Karten gehören zu welcher Stufe?
+    document.getElementById("karteZustand").hidden = s < 2;
+    document.getElementById("karteAbweichung").hidden = s < 2;
+    document.getElementById("karteAlarm").hidden = s < 2 || s > 4;   // im Stufen-Test ab Stufe 2
+    document.getElementById("karteMotor").hidden = s < 4;
+    knopfEinmessen.hidden = s < 2;
+    knopfEinmessen.textContent = s === 5 ? "Einmessen" : "Referenz setzen";
+    document.getElementById("diagrammTitel").textContent = s === 1
+      ? "ADC-Rohwert (letzte 10 s). Gestrichelt: 100 und 3995, ausserhalb davon stimmt ein Kabel nicht."
+      : "Abweichung in % (letzte 10 s), rote Linie = Grenzwert. Positiv = Richtung Überstreckung.";
+
+    // Kabel-Hinweis nur in Stufe 1 (später meldet der Zustand «Sensor-Ausfall» dasselbe)
+    const kabel = document.getElementById("kabelHinweis");
+    const kabelText = s === 1 ? kabelHinweis(daten.adc) : "";
+    kabel.textContent = kabelText;
+    kabel.hidden = kabelText === "";
+
+    // Checkliste nur neu aufbauen, wenn die Stufe wechselt (sonst gehen die Häkchen verloren)
+    if (gezeigteChecklisteStufe !== s) {
+      gezeigteChecklisteStufe = s;
+      const liste = document.getElementById("checkliste");
+      liste.textContent = "";
+      for (const punkt of STUFEN_CHECKLISTEN[s]) {
+        const eintrag = document.createElement("li");
+        const label = document.createElement("label");
+        const kasten = document.createElement("input");
+        kasten.type = "checkbox";
+        label.append(kasten, " " + punkt);
+        eintrag.append(label);
+        liste.append(eintrag);
+      }
+    }
+  }
+
   // Anzeige auffrischen (etwa 20 Mal pro Sekunde).
   function anzeigeAuffrischen() {
     const jetzt = Date.now();
+    stufenAuffrischen();
+    const s = aktuelleStufe();
     document.getElementById("anzeigeZustand").textContent = zustandText(daten.zustand);
+
+    // Im Stufen-Test ist das 5. Feld der D-Zeile der Alarm "zu weit".
+    // Der Motor läuft (Stufe 4) nur, wenn Alarm an UND kein Motor-Ausfall (Zustand 4).
+    const alarm = document.getElementById("anzeigeAlarm");
+    alarm.textContent = daten.motor === null ? "–" : (daten.motor === 1 ? "JA" : "nein");
+    alarm.className = "wert" + (daten.motor === 1 ? " motor-an" : "");
+
     const motor = document.getElementById("anzeigeMotor");
-    motor.textContent = daten.motor === null ? "–" : (daten.motor === 1 ? "an" : "aus");
-    motor.className = "wert" + (daten.motor === 1 ? " motor-an" : "");
+    let motorAn = daten.motor === 1;
+    if (s === 4 && daten.zustand === 4) {
+      motor.textContent = "Fehler";
+      motorAn = false;
+    } else {
+      motor.textContent = daten.motor === null ? "–" : (motorAn ? "an" : "aus");
+    }
+    motor.className = "wert" + (motorAn ? " motor-an" : "");
     document.getElementById("anzeigeAbweichung").textContent =
       daten.abweichungProzent === null ? "–" : daten.abweichungProzent.toFixed(1) + " %";
     document.getElementById("anzeigeWiderstand").textContent = widerstandText(daten.widerstandOhm);

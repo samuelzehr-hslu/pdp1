@@ -94,6 +94,7 @@ Aufbau von Prototyp 1 (`jointsense/`):
 - `jointsense/diagram.json`: Schaltung für die Wokwi-Simulation.
 - Schalter `GUI_MODUS` oben in `jointsense.ino` (REQ-006): `1` = Datenzeilen für das Live-GUI (115200 Baud, Einstellung im Repo), `0` = Texte für den Seriellen Monitor (9600 Baud).
 - `tools/gui/jointsense_live.html`: Live-GUI im Browser (Chrome/Edge), Anleitung in `tools/gui/README.md`.
+- `tools/flex_stufen/`: Stufen-Test für Prototyp 2 (Sensor → Grenzwert → Taste + LED → Motor), Stufe im GUI `tools/gui_flex/` wählbar. Test-Werkzeug, nicht Produkt-Code (keine Pipeline). Enthält eine Kopie von `jointsense_flex/pins.h`, die bei Kabeländerungen mitgezogen werden muss.
 
 Das Signalverarbeitungs-Konzept (Abtastrate, Sensorfusion, Entprellung, Einmessen, Drift) steht in der README unter «Software».
 

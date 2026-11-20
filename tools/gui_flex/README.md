@@ -23,6 +23,18 @@ Für Prototyp 1 (2 IMUs) gibt es ein eigenes GUI in `tools/gui/`. Die beiden pas
 6. Zum Einmessen: Arm entspannt gestreckt halten, Knopf **«Einmessen»** drücken (oder die Taste am Gerät)
    und den Arm 2 Sekunden ruhig lassen. Fertig ist es, wenn der Motor kurz vibriert und der Zustand «Bereit» zeigt.
 
+## Stufen-Test (Schritt für Schritt)
+
+Mit `tools/flex_stufen/flex_stufen.ino` auf dem Feather zeigt das GUI oben einen **Stufen-Test**:
+
+- **«Aktuelle Stufe: 2 – Grenzwert»**: Das meldet der Feather selbst. Der Text zeigt also, was wirklich läuft.
+- Knöpfe **Stufe 1 bis 4**: wechseln die Stufe, ohne neu hochzuladen.
+- Jede Stufe zeigt nur ihre Anzeigen und eine **Checkliste zum Abhaken**.
+  Stufe 1 zeigt im Diagramm den ADC-Rohwert statt der Abweichung.
+- Läuft der richtige Code (`jointsense_flex`), steht dort **«Stufe 5 – Komplett»**, und das GUI sieht aus wie immer.
+
+Die Anleitung steht in `tools/flex_stufen/README.md`.
+
 ## Was du siehst
 
 | Anzeige | Bedeutung |
@@ -53,5 +65,7 @@ Der Feather schickt Textzeilen mit 115200 Baud:
 - `G,<grenzwert x10>,<hysterese x10>,<motorstärke>`: Einstellungen, nach dem Start und beim Verbinden
 - `D,<zeit ms>,<adc>,<widerstand Ohm>,<abweichung x10>,<motor 0/1>,<zustand 0-4>`: 50 Mal pro Sekunde
 - `E,<text>`: Ereignisse
+- `S,<stufe 1-4>`: nur im Stufen-Test. Dort ist das 5. Feld der D-Zeile «zu weit» (Alarm) statt «Motor».
+  Das GUI schickt `1` bis `4` zum Wechseln der Stufe.
 
 Kaputte oder unbekannte Zeilen ignoriert das GUI einfach.
